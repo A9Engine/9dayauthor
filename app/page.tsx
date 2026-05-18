@@ -1,4 +1,10 @@
+"use client";
+
+import { useState } from "react";
+
 export default function Home() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const painPoints = [
     {
       source: "KDP Author Forum",
@@ -31,74 +37,114 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050505] text-white">
-
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#050505] text-white">
       {/* HERO */}
-      <section className="relative overflow-hidden bg-[#050505]">
-
-
-        <header className="relative z-20 mx-auto grid max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-8 px-5 py-6 sm:px-8">
-          <a href="/" className="flex flex-col items-start">
-           <img
-            src="/9dayauthor-logo.svg"
-            alt="9 Day Author"
-            className="h-auto w-[190px]"
-          />
-
-            <span className="mt-1 translate-x-6 text-xs font-medium text-white/60">
-              From idea to Amazon author
-            </span>
-          </a>
-
-          <nav className="hidden items-center justify-center gap-8 text-sm text-white/75 md:flex">
-            <a href="#how" className="transition hover:text-white">
-              How It Works
+      <section className="relative w-full overflow-hidden bg-[#050505]">
+        <header className="relative z-30 mx-auto w-full max-w-7xl px-5 py-6 sm:px-8">
+          <div className="flex items-start justify-between gap-4">
+            <a href="/" className="flex flex-col items-center lg:items-start">
+              <img
+                src="/9dayauthor-logo.svg"
+                alt="9 Day Author"
+                className="h-auto w-[185px] max-w-full object-contain sm:w-[190px]"
+              />
+              <span className="mt-1 text-center text-xs font-medium text-white/60 lg:text-left">
+                From idea to Amazon author
+              </span>
             </a>
 
-            <a href="#features" className="transition hover:text-white">
-              Features
-            </a>
+            <nav className="hidden items-center justify-center gap-8 text-sm font-bold text-white/70 lg:flex">
+              <a href="#how" className="transition hover:text-white">
+                How It Works
+              </a>
+              <a href="#features" className="transition hover:text-white">
+                Features
+              </a>
+              <a href="#why" className="transition hover:text-white">
+                Why Us
+              </a>
+              <a href="#pricing" className="transition hover:text-white">
+                Pricing
+              </a>
+            </nav>
 
-            <a href="#why" className="transition hover:text-white">
-              Why Us
-            </a>
+            <div className="flex items-center gap-3">
+              <a
+                href="/login"
+                className="hidden rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-white/75 transition hover:text-white lg:block"
+              >
+                Log In
+              </a>
 
-            <a href="#pricing" className="transition hover:text-white">
-              Pricing
-            </a>
-          </nav>
+              <a
+                href="/signup"
+                className="hidden rounded-xl bg-[#d4af37] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-[#d4af37]/20 sm:block"
+              >
+                Get Started
+              </a>
 
-          <div className="ml-auto flex items-center gap-4">
-            <a
-              href="/login"
-              className="hidden rounded-xl border border-white/10 px-5 py-3 text-sm font-bold text-white/75 transition hover:text-white md:block"
-            >
-              Log In
-            </a>
-
-            <a
-              href="/signup"
-              className="rounded-xl bg-[#d4af37] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-[#d4af37]/20"
-            >
-              Get Started
-            </a>
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white lg:hidden"
+                aria-label="Open menu"
+              >
+                <div className="space-y-1.5">
+                  <div className="h-[2px] w-6 rounded-full bg-white" />
+                  <div className="h-[2px] w-6 rounded-full bg-white" />
+                  <div className="h-[2px] w-6 rounded-full bg-white" />
+                </div>
+              </button>
+            </div>
           </div>
+
+          {mobileMenuOpen && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-[#0d0d0d]/95 p-5 backdrop-blur-xl lg:hidden">
+              <nav className="flex flex-col gap-4 text-base font-semibold text-white/85">
+                <a onClick={() => setMobileMenuOpen(false)} href="#how">
+                  How It Works
+                </a>
+                <a onClick={() => setMobileMenuOpen(false)} href="#features">
+                  Features
+                </a>
+                <a onClick={() => setMobileMenuOpen(false)} href="#why">
+                  Why Us
+                </a>
+                <a onClick={() => setMobileMenuOpen(false)} href="#pricing">
+                  Pricing
+                </a>
+              </nav>
+
+              <a
+                href="/signup"
+                className="mt-5 flex items-center justify-center rounded-xl bg-[#d4af37] px-5 py-4 text-sm font-bold text-black"
+              >
+                Start Your Book
+              </a>
+            </div>
+          )}
         </header>
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-12 px-5 pb-20 pt-10 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:pb-28">
+        <div className="relative z-10 mx-auto grid w-full max-w-7xl gap-4 px-5 pb-14 pt-0 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:gap-12 lg:pb-28 lg:pt-10">
+          {/* IMAGE FIRST ON MOBILE */}
+          <div className="relative order-first -mt-4 flex min-w-0 items-center justify-center pb-0 pt-0 lg:order-none lg:mt-0 lg:py-12">
+            <img
+              src="/book-mockup-hero.png"
+              alt="Hardcover, Kindle, and paperback book preview"
+              loading="eager"
+              decoding="async"
+              className="w-full max-w-[390px] object-contain drop-shadow-[0_25px_80px_rgba(0,0,0,0.65)] sm:max-w-[560px]"
+            />
+          </div>
 
-          {/* LEFT */}
-          <div>
-            <div className="mb-6 inline-flex rounded-full border border-[#d4af37]/30 bg-white/8 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#f5d76e]">
-              The guided author system
+          {/* TEXT */}
+          <div className="min-w-0">
+            <div className="mb-5 inline-flex max-w-full rounded-full border border-[#d4af37]/30 bg-white/8 px-4 py-2 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[#f5d76e] sm:text-xs">
+              Turn Your Story Into a Book
             </div>
 
-            <h1 className="max-w-3xl text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-3xl text-[44px] font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
               From Idea to{" "}
-              <span className="text-[#d4af37]">
-                Amazon Author
-              </span>{" "}
-              in 9 Days.
+              <span className="text-[#d4af37]">Amazon Author</span> in 9 Days.
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/75 sm:text-xl">
@@ -116,12 +162,11 @@ export default function Home() {
                 "Get guided Amazon KDP publishing steps",
                 "One-time $49 access for unlimited books",
               ].map((item) => (
-                <div key={item} className="flex items-center gap-3">
+                <div key={item} className="flex min-w-0 items-center gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#d4af37] text-xs font-black text-black">
                     ✓
                   </span>
-
-                  <span>{item}</span>
+                  <span className="min-w-0">{item}</span>
                 </div>
               ))}
             </div>
@@ -129,7 +174,7 @@ export default function Home() {
             <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center">
               <a
                 href="/signup"
-                className="rounded-2xl bg-[#d4af37] px-7 py-4 text-center text-base font-black text-black shadow-2xl shadow-[#d4af37]/25 transition hover:scale-[1.03]"
+                className="rounded-2xl bg-[#d4af37] px-7 py-4 text-center text-base font-black text-black shadow-2xl shadow-[#d4af37]/25 transition hover:scale-[1.02]"
               >
                 Start Your Book Now →
               </a>
@@ -139,357 +184,157 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-          {/* RIGHT */}
-          <div className="relative flex items-center justify-center py-8 lg:py-12">
-            <img
-              src="/book-mockup-hero.png"
-              alt="Hardcover, Kindle, and paperback book preview"
-              className="w-full max-w-[620px] object-contain drop-shadow-[0_25px_80px_rgba(0,0,0,0.65)]"
-            />
-          </div>
         </div>
       </section>
 
-      {/* AI VOICE WRITING SECTION */}
-      <section 
-      id="features"
-      className="relative overflow-hidden bg-[#050505] px-5 py-24 sm:px-8">
-
-        {/* Purple Glow */}
+      {/* AI VOICE WRITING */}
+      <section
+        id="features"
+        className="relative w-full overflow-hidden bg-[#050505] px-5 py-16 text-white sm:px-8 lg:py-24"
+      >
         <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-purple-600/10 blur-[140px]" />
 
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-
-          {/* LEFT SIDE */}
-          <div>
-
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300">
-              🎙 AI Voice Writing
+        <div className="relative z-10 mx-auto grid w-full max-w-7xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+          <div className="min-w-0">
+            <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-purple-200 sm:text-xs">
+              🎙️ Voice To Text
             </div>
 
-            <h2 className="max-w-2xl text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
+            <h2 className="max-w-3xl text-[40px] font-black leading-[0.98] tracking-tight sm:text-5xl lg:text-6xl">
               Talk Naturally and{" "}
-              <span className="text-[#d4af37]">
-                Watch Your Book
-              </span>{" "}
-              Appear in Real Time
+              <span className="text-[#d4af37]">Watch Your Book</span> Appear in
+              Real Time
             </h2>
 
-            <p className="mt-8 max-w-xl text-xl leading-9 text-white/70">
-              Speak your ideas, stories, lessons, and experiences out loud.
-              9 Day Author turns your voice into a structured,
-              publish-ready book with live progress tracking and AI coaching.
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65 sm:text-xl">
+              Speak your ideas, stories, lessons, and experiences out loud. 9
+              Day Author turns your voice into a structured, publish-ready book
+              with live progress tracking and AI coaching.
             </p>
 
-            <div className="mt-10 space-y-7">
-
+            <div className="mt-8 space-y-5">
               {[
-                [
-                  "🎤",
-                  "Voice To Text",
-                  "Speak naturally and see your words appear instantly.",
-                ],
-                [
-                  "✨",
-                  "AI Structures Your Ideas",
-                  "Our AI organizes your content into chapters and sections.",
-                ],
-                [
-                  "📘",
-                  "Live Page Tracking",
-                  "Watch your estimated page count grow while you write.",
-                ],
-                [
-                  "🎯",
-                  "Smart Chapter Coaching",
-                  "Get feedback when a chapter needs more detail or expansion.",
-                ],
-                [
-                  "☁️",
-                  "Amazon Ready",
-                  "Paperback, hardcover, and Kindle-ready exports included.",
-                ],
+                ["🎤", "Voice To Text", "Speak naturally and see your words appear instantly."],
+                ["✨", "AI Structures Your Ideas", "Our AI organizes your content into chapters and sections."],
+                ["📘", "Live Page Tracking", "Watch your estimated page count grow while you write."],
+                ["🎯", "Smart Chapter Coaching", "Get feedback when a chapter needs more detail or expansion."],
+                ["☁️", "Amazon Ready", "Paperback, hardcover, and Kindle-ready exports included."],
               ].map(([icon, title, text]) => (
-                <div key={title} className="flex gap-5">
-
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-purple-500/20 bg-white/5 text-2xl">
+                <div key={title} className="flex min-w-0 gap-4">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-purple-500/25 bg-white/5 text-2xl">
                     {icon}
                   </div>
-
-                  <div>
-                    <div className="text-lg font-black text-white">
-                      {title}
-                    </div>
-
-                    <div className="mt-1 text-white/60 leading-7">
-                      {text}
-                    </div>
+                  <div className="min-w-0">
+                    <h3 className="text-xl font-black">{title}</h3>
+                    <p className="mt-1 leading-7 text-white/60">{text}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* RIGHT SIDE */}
-          <div className="relative">
+          <div className="w-full min-w-0 overflow-hidden rounded-[2rem] border border-purple-500/25 bg-[#0b0812] p-5 shadow-2xl shadow-purple-950/40 sm:p-7 lg:p-8">
+            <div className="mb-6 flex min-w-0 items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <img
+                src="/9dayauthor-logo.svg"
+                alt="9 Day Author"
+                className="h-auto w-[170px] max-w-full object-contain"
+              />
+              <div className="shrink-0 rounded-full border border-green-400/30 bg-green-500/15 px-4 py-2 text-sm font-bold text-green-300">
+                ✓ Saved
+              </div>
+            </div>
 
-            {/* Glow */}
-            <div className="absolute inset-0 rounded-[2.5rem] bg-purple-600/10 blur-[100px]" />
-
-            <div className="relative rounded-[2.5rem] border border-purple-500/20 bg-[#0b0b14] p-6 shadow-[0_0_80px_rgba(124,58,237,0.15)]">
-
-              {/* TOP BAR */}
-              <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-5">
-
-                <div className="flex items-center gap-3">
-                  <img
-                    src="/9dayauthor-logo.svg"
-                    alt="9 Day Author"
-                    className="h-auto w-[190px]"
-                  />
-
+            <div className="grid w-full gap-4 sm:grid-cols-4">
+              {[
+                ["Words", "2,847"],
+                ["Est. Pages", "7.2"],
+                ["Chapter Goal", "12"],
+                ["Book Progress", "58%"],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-4"
+                >
+                  <div className="text-[11px] font-black uppercase tracking-[0.18em] text-white/45">
+                    {label}
+                  </div>
+                  <div className="mt-3 text-3xl font-black">{value}</div>
                 </div>
+              ))}
+            </div>
 
-                <div className="rounded-full border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-300">
-                  ✓ Saved
-                </div>
+            <div className="mt-5 w-full overflow-hidden rounded-3xl border border-purple-500/20 bg-black/25 p-5">
+              <div className="flex items-center gap-2 text-sm font-bold text-purple-200">
+                <span className="h-2.5 w-2.5 rounded-full bg-purple-400" />
+                Live Voice Input
               </div>
 
-              {/* MAIN GRID */}
-              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-
-                {/* MAIN WRITING AREA */}
-                <div>
-
-                  <div className="mb-5">
-                    <div className="text-sm font-bold uppercase tracking-[0.18em] text-purple-300">
-                      Chapter 7
-                    </div>
-
-                    <div className="mt-2 text-4xl font-black">
-                      The Turning Point
-                    </div>
-                  </div>
-
-                  {/* STATS */}
-                  <div className="grid gap-4 sm:grid-cols-4">
-
-                    {[
-                      ["WORDS", "2,847"],
-                      ["EST. PAGES", "7.2"],
-                      ["CHAPTER GOAL", "12"],
-                      ["BOOK PROGRESS", "58%"],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-                      >
-                        <div className="text-xs font-bold uppercase tracking-[0.18em] text-white/40">
-                          {label}
-                        </div>
-
-                        <div className="mt-3 text-3xl font-black">
-                          {value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* LIVE TRANSCRIPT */}
-                  <div className="mt-6 rounded-3xl border border-purple-500/20 bg-black/30 p-6">
-
-                    <div className="mb-4 flex items-center gap-3">
-                      <div className="h-3 w-3 animate-pulse rounded-full bg-purple-500" />
-
-                      <div className="font-bold text-purple-300">
-                        Live Voice Input
-                      </div>
-                    </div>
-
-                    {/* WAVE */}
-                    <div className="mb-6 flex h-20 items-center gap-1 overflow-hidden">
-                      {Array.from({ length: 48 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-1 rounded-full bg-purple-500"
-                          style={{
-                            height: `${Math.max(
-                              12,
-                              Math.abs(Math.sin(i * 0.45)) * 70
-                            )}px`,
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="space-y-5 text-xl leading-10 text-white/85">
-                      <p>
-                        That was the moment{" "}
-                        <span className="rounded bg-purple-500/30 px-2 py-1 text-purple-200">
-                          everything changed.
-                        </span>
-                      </p>
-
-                      <p>
-                        I realized I was not here just to survive...
-                      </p>
-
-                      <p>
-                        I was here to build something that would outlive me.
-                      </p>
-
-                      <p>
-                        That decision set me on a path that I never could have imagined...
-                      </p>
-                    </div>
-
-                    <div className="mt-8 flex items-center justify-between">
-
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full border border-purple-500/30 bg-purple-500/10 text-2xl">
-                          ⏺
-                        </div>
-
-                        <div>
-                          <div className="font-black">
-                            00:01:37
-                          </div>
-
-                          <div className="text-white/45">
-                            Recording...
-                          </div>
-                        </div>
-                      </div>
-
-                      <button className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-bold transition hover:bg-white/10">
-                        Finish Recording
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SIDEBAR */}
-                <div className="space-y-5">
-
-                  {/* BOOK */}
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-                    <div className="flex items-center gap-5">
-
-                      <img
-                        src="/book-mockup-hero.png"
-                        alt="Book"
-                        className="w-24 object-contain"
-                      />
-
-                      <div>
-                        <div className="text-2xl font-black">
-                          Your Book
-                        </div>
-
-                        <div className="mt-2 text-white/55">
-                          Est. 320 Pages
-                        </div>
-
-                        <div className="text-white/55">
-                          Non Fiction
-                        </div>
-
-                        <button className="mt-5 rounded-xl border border-white/10 bg-black px-4 py-2 text-sm font-bold transition hover:bg-white/10">
-                          View Book
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CHAPTER OUTLINE */}
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-
-                    <div className="mb-5 text-2xl font-black">
-                      Chapter Outline
-                    </div>
-
-                    <div className="space-y-3">
-
-                      {[
-                        ["1", "The Beginning", "8.4"],
-                        ["2", "The Foundation", "11.2"],
-                        ["3", "The Challenge", "10.5"],
-                        ["4", "The Decision", "9.1"],
-                        ["5", "The Journey", "12.3"],
-                        ["6", "The Breakthrough", "10.8"],
-                        ["7", "The Turning Point", "7.2 / 12"],
-                      ].map(([num, title, pages]) => (
-                        <div
-                          key={title}
-                          className={`flex items-center justify-between rounded-2xl px-4 py-3 ${
-                            num === "7"
-                              ? "bg-purple-500/20 border border-purple-500/30"
-                              : "bg-white/[0.02]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div
-                              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
-                                num === "7"
-                                  ? "bg-purple-500 text-white"
-                                  : "bg-green-500 text-black"
-                              }`}
-                            >
-                              {num}
-                            </div>
-
-                            <div className="font-semibold">
-                              {title}
-                            </div>
-                          </div>
-
-                          <div className="text-sm text-white/50">
-                            {pages} pages
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* BOTTOM STRIP */}
-              <div className="mt-8 grid gap-4 border-t border-white/10 pt-8 md:grid-cols-4">
-
-                {[
-                  ["⚡", "10X Faster", "Create in minutes what used to take hours."],
-                  ["🧠", "AI Powered", "Advanced AI understands context and meaning."],
-                  ["🔒", "Private & Secure", "Your ideas are encrypted and always yours."],
-                  ["🏆", "Publish With Confidence", "From first draft to Amazon ready in 9 days."],
-                ].map(([icon, title, text]) => (
+              <div className="mt-6 flex h-20 w-full items-center gap-1 overflow-hidden">
+                {Array.from({ length: 38 }).map((_, i) => (
                   <div
-                    key={title}
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-                  >
-                    <div className="text-3xl">
-                      {icon}
-                    </div>
-
-                    <div className="mt-4 text-lg font-black">
-                      {title}
-                    </div>
-
-                    <div className="mt-2 leading-7 text-white/55">
-                      {text}
-                    </div>
-                  </div>
+                    key={i}
+                    className="w-1.5 shrink-0 rounded-full bg-purple-400"
+                    style={{
+                      height: `${20 + ((i * 17) % 50)}px`,
+                    }}
+                  />
                 ))}
+              </div>
+
+              <div className="mt-6 space-y-4 text-xl leading-9 text-white/85 sm:text-2xl">
+                <p>
+                  That was the moment{" "}
+                  <span className="rounded bg-purple-700/70 px-2">
+                    everything
+                  </span>{" "}
+                  changed.
+                </p>
+                <p>I realized I was not here just to survive...</p>
+                <p>I was here to build something that would outlive me.</p>
+              </div>
+
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full border border-purple-500/30 bg-purple-500/15 text-xl">
+                    ⏺️
+                  </div>
+                  <div>
+                    <div className="text-lg font-black">00:01:37</div>
+                    <div className="text-white/45">Recording...</div>
+                  </div>
+                </div>
+
+                <button className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-bold">
+                  Finish Recording
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div className="text-3xl">⚡</div>
+                <div className="mt-3 text-xl font-black">10X Faster</div>
+                <p className="mt-2 text-white/55">
+                  Create in minutes what used to take hours.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div className="text-3xl">🔒</div>
+                <div className="mt-3 text-xl font-black">Private & Secure</div>
+                <p className="mt-2 text-white/55">
+                  Your ideas are encrypted and always yours.
+                </p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* PAIN POINTS */}
-      <section className="bg-[#f7f4ed] px-5 py-14 text-black sm:px-8">
-        <div className="mx-auto max-w-7xl">
-
+      {/* TRUST STRIP + PAIN POINTS */}
+      <section id="why" className="w-full overflow-hidden bg-[#f7f4ed] px-5 py-14 text-black sm:px-8">
+        <div className="mx-auto w-full max-w-7xl">
           <div className="mb-16 grid gap-4 rounded-3xl border border-black/10 bg-white p-5 shadow-2xl shadow-black/10 md:grid-cols-4">
             {[
               ["🚀", "Go from idea to author in 9 days"],
@@ -497,24 +342,20 @@ export default function Home() {
               ["📘", "Paperback, hardcover, and Kindle-ready"],
               ["🏆", "Create unlimited books for one price"],
             ].map(([icon, text]) => (
-              <div key={text} className="flex items-center gap-4 p-3">
-                <div className="text-3xl">{icon}</div>
-
-                <div className="font-bold leading-snug">
-                  {text}
-                </div>
+              <div key={text} className="flex min-w-0 items-center gap-4 p-3">
+                <div className="shrink-0 text-3xl">{icon}</div>
+                <div className="min-w-0 font-bold leading-snug">{text}</div>
               </div>
             ))}
           </div>
 
-          <div id="why" className="text-center">
+          <div className="text-center">
             <h2 className="text-3xl font-black tracking-tight sm:text-5xl">
               What Authors Are{" "}
               <span className="text-[#b91c1c] underline decoration-[#d4af37] decoration-4 underline-offset-4">
                 Frustrated About
               </span>
             </h2>
-
             <p className="mx-auto mt-4 max-w-2xl text-black/60">
               Real self-publishing pain points inspired the way 9 Day Author is
               built.
@@ -525,19 +366,17 @@ export default function Home() {
             {painPoints.map((item) => (
               <div
                 key={item.quote}
-                className="rounded-3xl border border-black/10 bg-white p-6 shadow-xl shadow-black/5"
+                className="min-w-0 overflow-hidden rounded-3xl border border-black/10 bg-white p-6 shadow-xl shadow-black/5"
               >
-                <div className="mb-5 flex items-center justify-between">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm font-bold text-black/70">
                     {item.source}
                   </div>
-
                   <div className="rounded-full bg-[#fff1b8] px-3 py-1 text-xs font-bold">
                     Public complaint
                   </div>
                 </div>
-
-                <p className="text-lg font-semibold leading-8">
+                <p className="break-words text-xl font-semibold leading-8 sm:text-lg">
                   “{item.quote.replace(item.highlight, "")}
                   <mark className="rounded bg-[#ffe680] px-1">
                     {item.highlight}
@@ -549,56 +388,113 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section
-  id="pricing"
-  className="bg-[#f7f4ed] px-5 py-20 text-black sm:px-8"
->
-  <div className="mx-auto max-w-4xl text-center">
-    <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-      Founder Access
-    </h2>
 
-    <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-black/60">
-      One-time access to the complete 9 Day Author system.
-      No monthly subscription. No complicated pricing.
-    </p>
-
-    <div className="mx-auto mt-10 max-w-xl rounded-[2rem] border border-black/10 bg-white p-8 shadow-2xl shadow-black/10">
-      <div className="text-sm font-black uppercase tracking-[0.2em] text-[#b38b16]">
-        One-time payment
-      </div>
-
-      <div className="mt-4 text-6xl font-black">$49</div>
-
-      <div className="mt-2 text-black/55">
-        Founder access price
-      </div>
-
-      <div className="mt-8 space-y-3 text-left">
-        {[
-          "Unlimited books",
-          "Paperback, hardcover, and Kindle-ready workflow",
-          "Guided 9-day author path",
-          "Voice-to-book writing system",
-          "Formatting and export guidance",
-          "Amazon KDP publishing checklist",
-        ].map((item) => (
-          <div key={item} className="flex gap-3">
-            <span className="font-black text-[#d4af37]">✓</span>
-            <span className="font-semibold">{item}</span>
+      {/* HOW IT WORKS */}
+      <section id="how" className="w-full overflow-hidden bg-white px-5 py-20 text-black sm:px-8">
+        <div className="mx-auto w-full max-w-7xl">
+          <div className="text-center">
+            <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
+              The 9 Day Author Path
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-black/60">
+              One guided step each day. No guessing. No scattered tools. No
+              publishing overwhelm.
+            </p>
           </div>
-        ))}
-      </div>
 
-     <a
-      href="/signup"
-      className="mt-8 block w-full rounded-2xl bg-black px-7 py-4 text-center text-lg font-black text-[#d4af37] transition hover:scale-[1.02]"
-    >
-      Start Your Book Tonight
-    </a>
-    </div>
-  </div>
-</section>
+          <div className="mt-12 grid gap-4 md:grid-cols-3">
+            {steps.map((step, index) => (
+              <div
+                key={step}
+                className="min-w-0 rounded-3xl border border-black/10 bg-[#faf8f1] p-6"
+              >
+                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-lg font-black text-[#d4af37]">
+                  {index + 1}
+                </div>
+                <h3 className="text-xl font-black">{step}</h3>
+                <p className="mt-3 leading-7 text-black/60">
+                  Complete the next focused step and watch your book move closer
+                  to Amazon-ready.
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section className="w-full overflow-hidden bg-[#050505] px-5 py-20 text-white sm:px-8">
+        <div className="mx-auto w-full max-w-7xl">
+          <h2 className="text-center text-4xl font-black sm:text-5xl">
+            Everything You Need.{" "}
+            <span className="text-[#d4af37]">All in One System.</span>
+          </h2>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {[
+              ["Writing System", "Brainstorm, outline, draft, and expand chapters in your own voice."],
+              ["Page Tracking", "See estimated pages and identify thin chapters before it is too late."],
+              ["Cover Creator", "Generate artwork or upload your own images with real font overlays."],
+              ["Formatting Engine", "Create clean manuscript layouts for print and ebook publishing."],
+              ["KDP Guidance", "Follow clear steps for Amazon publishing, ISBN choices, and exports."],
+              ["Unlimited Books", "Pay once and create as many books as you want."],
+            ].map(([title, text]) => (
+              <div
+                key={title}
+                className="min-w-0 rounded-3xl border border-white/10 bg-white/8 p-6"
+              >
+                <h3 className="text-xl font-black text-[#d4af37]">{title}</h3>
+                <p className="mt-3 leading-7 text-white/65">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section id="pricing" className="w-full overflow-hidden bg-[#f7f4ed] px-5 py-20 text-black sm:px-8">
+        <div className="mx-auto w-full max-w-4xl text-center">
+          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
+            Founder Access
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-black/60">
+            One-time access to the complete 9 Day Author system. No monthly
+            subscription. No complicated pricing.
+          </p>
+
+          <div className="mx-auto mt-10 max-w-xl overflow-hidden rounded-[2rem] border border-black/10 bg-white p-8 shadow-2xl shadow-black/10">
+            <div className="text-sm font-black uppercase tracking-[0.2em] text-[#b38b16]">
+              One-time payment
+            </div>
+            <div className="mt-4 text-6xl font-black">$49</div>
+            <div className="mt-2 text-black/55">Founder access price</div>
+
+            <div className="mt-8 space-y-3 text-left">
+              {[
+                "Unlimited books",
+                "Paperback, hardcover, and Kindle-ready workflow",
+                "Voice-to-book writing system",
+                "Guided 9-day author path",
+                "Cover creation system",
+                "Formatting and export guidance",
+                "Amazon KDP publishing checklist",
+              ].map((item) => (
+                <div key={item} className="flex min-w-0 gap-3">
+                  <span className="shrink-0 font-black text-[#d4af37]">✓</span>
+                  <span className="min-w-0 font-semibold">{item}</span>
+                </div>
+              ))}
+            </div>
+
+            <a
+              href="/signup"
+              className="mt-8 block w-full rounded-2xl bg-black px-7 py-4 text-center text-lg font-black text-[#d4af37] transition hover:scale-[1.02]"
+            >
+              Start Your Book Tonight
+            </a>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
