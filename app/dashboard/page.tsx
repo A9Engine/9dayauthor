@@ -7,14 +7,17 @@ export default function DashboardPage() {
         <aside className="hidden w-72 shrink-0 bg-[#050505] p-6 text-white lg:flex lg:flex-col">
           <a href="/" className="mb-10 block">
             <img src="/9dayauthor-logo.png" alt="9 Day Author" className="h-14 w-auto" />
-            <p className="mt-2 translate-x-5 text-xs text-white/55">
+            <p className="mt-1 translate-x-5 text-s text-white/55">
               From idea to Amazon author
             </p>
           </a>
 
-          <button className="mb-8 rounded-2xl bg-[#d4af37] px-5 py-4 text-left font-black text-black">
-            + New Book Project
-          </button>
+          <a
+  href="/new-book"
+  className="mb-8 block rounded-2xl bg-[#d4af37] px-5 py-4 text-left font-black text-black transition hover:-translate-y-0.5 hover:bg-[#e6c24a] hover:shadow-lg hover:shadow-[#d4af37]/20"
+>
+  + New Book Project
+</a>
 
           <nav className="space-y-2 text-sm font-semibold text-white/70">
             {["Dashboard", "My Books", "Outline", "Chapters", "Formatting", "Cover Creator", "Export & Download", "Publish to Amazon"].map((item, index) => (
@@ -234,12 +237,12 @@ export default function DashboardPage() {
                   <div className="mt-6 flex justify-center">
                     <div className="w-[180px] rounded-[1.5rem] border border-white/10 bg-gradient-to-b from-[#1c1c1c] to-black p-5 shadow-2xl">
                       <div className="flex h-[260px] flex-col justify-between rounded-[1rem] border border-[#d4af37]/30 bg-gradient-to-b from-[#1b1b1b] to-[#050505] p-5">
-                        <p className="text-center text-2xl font-black leading-tight tracking-tight">
-                          THE
-                          <br />
-                          FREEDOM
-                          <br />
-                          BLUEPRINT
+                        <p className="text-center text-xl font-black leading-tight tracking-tight">
+                        THE
+                        <br />
+                        FREEDOM
+                        <br />
+                        BLUEPRINT
                         </p>
 
                         <div>
