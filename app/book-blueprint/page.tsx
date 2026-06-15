@@ -1,5 +1,6 @@
-import { supabase } from "../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabaseAdmin";
 import ContinueWritingButton from "../components/ContinueWritingButton";
+import AuthorLayout from "../components/AuthorLayout";
 
 type PageProps = {
   searchParams: Promise<{
@@ -34,7 +35,7 @@ export default async function BookBlueprintPage({ searchParams }: PageProps) {
     );
   }
 
-  const { data: project, error } = await supabase
+  const { data: project, error } = await supabaseAdmin
     .from("book_projects")
     .select("*")
     .eq("id", projectId)
@@ -78,39 +79,12 @@ export default async function BookBlueprintPage({ searchParams }: PageProps) {
   ];
 
   return (
-    <main className="min-h-screen bg-[#f7f4ed] text-black">
-  <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur">
-    <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-      <a href="/" className="block">
-        <img
-          src="/9dayauthor-logo.png"
-          alt="9 Day Author"
-          className="h-10 w-auto"
-        />
-        <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/45">
-          From Idea to Amazon Author
-        </div>
-      </a>
-
-      <div className="flex items-center gap-3">
-        <div className="hidden rounded-full border border-[#d4af37]/30 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#d4af37] sm:block">
-          Step 2 of 9
-        </div>
-
-        <a
-          href="/dashboard"
-          className="rounded-full bg-[#d4af37] px-4 py-2 text-sm font-black text-black transition hover:opacity-90"
-        >
-          Dashboard
-        </a>
-      </div>
-    </div>
-  </header>
+  <AuthorLayout
+  currentStep={2}
+  projectId={projectId}
+>
 
   <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
-        <a href="/new-book" className="text-sm font-semibold text-black/60">
-          ← Back to Book Setup
-        </a>
 
         <section className="mt-8 rounded-[2rem] bg-white p-6 shadow-xl shadow-black/5 sm:p-8">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#b38b16]">
@@ -227,6 +201,6 @@ export default async function BookBlueprintPage({ searchParams }: PageProps) {
           </aside>
         </section>
       </div>
-    </main>
+    </AuthorLayout>
   );
 }

@@ -1,15 +1,10 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export async function POST(req: Request) {
   try {
@@ -19,7 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
     }
 
-    const { data: project, error: fetchError } = await supabase
+    const { data: project, error: fetchError } = await supabaseAdmin
       .from("book_projects")
       .select("*")
       .eq("id", projectId)
@@ -109,7 +104,7 @@ Do not force 9 chapters unless 9 truly fits the book.
 
     const parsed = JSON.parse(content);
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from("book_projects")
       .update({
         blueprint_output: parsed,

@@ -1,9 +1,11 @@
-import { supabase } from "../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabaseAdmin";
 import ChapterWorkspace from "../components/ChapterWorkspace";
+import AuthorLayout from "../components/AuthorLayout";
 
 type PageProps = {
   searchParams: Promise<{
     id?: string;
+    chapterId?: string;
   }>;
 };
 
@@ -22,6 +24,7 @@ export default async function ChaptersPage({
 }: PageProps) {
   const params = await searchParams;
   const projectId = params.id;
+  const initialChapterId = params.chapterId;
 
   if (!projectId) {
     return (
@@ -31,13 +34,13 @@ export default async function ChaptersPage({
     );
   }
 
-  const { data: project } = await supabase
+  const { data: project } = await supabaseAdmin
     .from("book_projects")
     .select("*")
     .eq("id", projectId)
     .single();
 
-  const { data: existingChapters } = await supabase
+  const { data: existingChapters } = await supabaseAdmin
     .from("book_chapters")
     .select("*")
     .eq("project_id", projectId)
@@ -55,6 +58,7 @@ export default async function ChaptersPage({
         },
         index: number
       ) => ({
+        user_id: project.user_id,
         project_id: projectId,
         chapter_number: index + 1,
         title: chapter.title || `Chapter ${index + 1}`,
@@ -64,9 +68,9 @@ export default async function ChaptersPage({
       })
     );
 
-    await supabase.from("book_chapters").insert(generatedRows);
+    await supabaseAdmin.from("book_chapters").insert(generatedRows);
 
-    const { data: refreshedChapters } = await supabase
+    const { data: refreshedChapters } = await supabaseAdmin
       .from("book_chapters")
       .select("*")
       .eq("project_id", projectId)
@@ -78,48 +82,19 @@ export default async function ChaptersPage({
   const activeChapter = chapters[0];
 
   return (
-    <main className="min-h-screen bg-[#f7f4ed] text-black">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <a href="/" className="block">
-            <img
-              src="/9dayauthor-logo.png"
-              alt="9 Day Author"
-              className="h-10 w-auto"
-            />
-            <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/45">
-              From Idea to Amazon Author
-            </div>
-          </a>
+    <AuthorLayout
+  currentStep={3}
+  projectId={projectId}
+>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden rounded-full border border-[#d4af37]/30 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#d4af37] sm:block">
-              Step 3 of 9
-            </div>
-
-            <a
-              href="/dashboard"
-              className="rounded-full bg-[#d4af37] px-4 py-2 text-sm font-black text-black transition hover:opacity-90"
-            >
-              Dashboard
-            </a>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-5 pt-6 sm:px-8">
-        <a
-            href={`/book-blueprint?id=${projectId}`}
-            className="inline-flex items-center rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-bold text-black/60 shadow-sm transition hover:-translate-y-0.5 hover:text-black"
-        >
-            ← Back to Blueprint
-        </a>
-        </div>
-
-        <ChapterWorkspace
-        projectTitle={project?.title || "Untitled Book"}
-        chapters={chapters}
-        />
-    </main>
+       <div className="w-full overflow-x-hidden">
+  <ChapterWorkspace
+    projectTitle={project?.title || "Untitled Book"}
+    targetLength={project?.target_length || ""}
+    chapters={chapters}
+    initialChapterId={initialChapterId}
+  />
+</div>
+    </AuthorLayout>
   );
 }

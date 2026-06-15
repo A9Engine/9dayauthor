@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import AuthorLayout from "../components/AuthorLayout";
 
 
 export default function NewBookPage() {
@@ -47,11 +48,22 @@ export default function NewBookPage() {
 
   setIsSaving(true);
 
+  const {
+  data: { user },
+} = await supabase.auth.getUser();
+
+if (!user) {
+  setIsSaving(false);
+  setErrorMessage("Please log in before creating a book.");
+  return;
+}
+
   const finalBookType = bookType;
 
   const { data, error } = await supabase
     .from("book_projects")
     .insert({
+      user_id: user.id,
       title: title.trim(),
       author_name: authorName.trim(),
       book_type: finalBookType,
@@ -95,42 +107,9 @@ export default function NewBookPage() {
 }
 
   return (
-   <main className="min-h-screen bg-[#f7f4ed] text-black">
-  <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur">
-    <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-      <a href="/" className="block">
-        <img
-          src="/9dayauthor-logo.png"
-          alt="9 Day Author"
-          className="h-10 w-auto"
-        />
-        <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/45">
-          From Idea to Amazon Author
-        </div>
-      </a>
-
-      <div className="flex items-center gap-3">
-        <div className="hidden rounded-full border border-[#d4af37]/30 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#d4af37] sm:block">
-          Step 1 of 9
-        </div>
-
-        <a
-          href="/dashboard"
-          className="rounded-full bg-[#d4af37] px-4 py-2 text-sm font-black text-black transition hover:opacity-90"
-        >
-          Dashboard
-        </a>
-      </div>
-    </div>
-  </header>
+   <AuthorLayout currentStep={1}>
 
   <div className="mx-auto max-w-4xl px-5 py-10 sm:px-8">
-        <a
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-black/60 transition hover:text-black"
-        >
-          ← Back to Dashboard
-        </a>
 
         <div className="mt-8">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#b38b16]">
@@ -314,6 +293,6 @@ export default function NewBookPage() {
           </div>
         </div>
       </div>
-    </main>
+    </AuthorLayout>
   );
 }

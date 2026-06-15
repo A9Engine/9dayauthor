@@ -10,7 +10,7 @@ export default function Home() {
       source: "KDP Author Forum",
       quote:
         "I uploaded my ebook again and the clickable table of contents still will not work.",
-      highlight: "TOC still will not work",
+      highlight: "clickable table of contents still will not work.",
     },
     {
       source: "Self Publishing Group",
@@ -42,14 +42,14 @@ export default function Home() {
       <section className="relative w-full overflow-hidden bg-[#050505]">
         <header className="relative z-30 mx-auto w-full max-w-7xl px-5 py-6 sm:px-8">
           <div className="flex items-start justify-between gap-4">
-            <a href="/" className="flex flex-col items-center lg:items-start">
+            <a href="/" className="flex flex-col items-center text-center">
               <img
                 src="/9dayauthor-logo.svg"
                 alt="9 Day Author"
                 className="h-auto w-[185px] max-w-full object-contain sm:w-[190px]"
               />
-              <span className="mt-1 text-center text-xs font-medium text-white/60 lg:text-left">
-                From idea to Amazon author
+              <span className="mt-1 text-center text-xs font-medium text-white/60 lg:text-center">
+                From Idea to Amazon Author
               </span>
             </a>
 
@@ -139,7 +139,7 @@ export default function Home() {
           {/* TEXT */}
           <div className="min-w-0">
             <div className="mb-5 inline-flex max-w-full rounded-full border border-[#d4af37]/30 bg-white/8 px-4 py-2 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[#f5d76e] sm:text-xs">
-              Turn Your Story Into a Book
+              #1 Book Creation Platform
             </div>
 
             <h1 className="max-w-3xl text-[44px] font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
@@ -160,7 +160,7 @@ export default function Home() {
                 "Create professional covers with real typography",
                 "Export paperback, hardcover, and ebook files",
                 "Get guided Amazon KDP publishing steps",
-                "One-time $49 access for unlimited books",
+                "Unlimited books with one annual membership",
               ].map((item) => (
                 <div key={item} className="flex min-w-0 items-center gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#d4af37] text-xs font-black text-black">
@@ -357,7 +357,7 @@ export default function Home() {
               </span>
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-black/60">
-              Real self-publishing pain points inspired the way 9 Day Author is
+              Real self-publishing pain points inspired the way 9 Day Author was
               built.
             </p>
           </div>
@@ -377,10 +377,12 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="break-words text-xl font-semibold leading-8 sm:text-lg">
-                  “{item.quote.replace(item.highlight, "")}
+  “
+                  {item.quote.split(item.highlight)[0]}
                   <mark className="rounded bg-[#ffe680] px-1">
                     {item.highlight}
                   </mark>
+                  {item.quote.split(item.highlight)[1]}
                   ”
                 </p>
               </div>
@@ -455,19 +457,25 @@ export default function Home() {
       <section id="pricing" className="w-full overflow-hidden bg-[#f7f4ed] px-5 py-20 text-black sm:px-8">
         <div className="mx-auto w-full max-w-4xl text-center">
           <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            Founder Access
+            Become a Published Author This Year
           </h2>
+
           <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-black/60">
-            One-time access to the complete 9 Day Author system. No monthly
-            subscription. No complicated pricing.
+            Everything you need to go from idea to published book inside one guided system.
+            Unlimited books. One simple annual membership.
           </p>
 
           <div className="mx-auto mt-10 max-w-xl overflow-hidden rounded-[2rem] border border-black/10 bg-white p-8 shadow-2xl shadow-black/10">
             <div className="text-sm font-black uppercase tracking-[0.2em] text-[#b38b16]">
-              One-time payment
+              Founding Member Price
             </div>
-            <div className="mt-4 text-6xl font-black">$49</div>
-            <div className="mt-2 text-black/55">Founder access price</div>
+            <div className="mt-4 flex items-end justify-center gap-2">
+            <span className="text-6xl font-black">$49</span>
+            <span className="mb-2 text-xl font-medium text-black/50">
+              /year
+            </span>
+          </div>
+            <div className="mt-2 text-black/55">Unlimited books. Full access for one year.</div>
 
             <div className="mt-8 space-y-3 text-left">
               {[
@@ -490,7 +498,7 @@ export default function Home() {
               href="/signup"
               className="mt-8 block w-full rounded-2xl bg-black px-7 py-4 text-center text-lg font-black text-[#d4af37] transition hover:scale-[1.02]"
             >
-              Start Your Book Tonight
+              Join 9 Day Author
             </a>
           </div>
         </div>

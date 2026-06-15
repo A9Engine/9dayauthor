@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +13,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: project, error: fetchError } = await supabase
+    const { data: project, error: fetchError } = await supabaseAdmin
       .from("book_projects")
       .select("*")
       .eq("id", projectId)
@@ -28,6 +24,20 @@ export async function POST(req: Request) {
         { error: "Project not found" },
         { status: 404 }
       );
+    }
+
+    const { data: existingChapters } = await supabaseAdmin
+      .from("book_chapters")
+      .select("id")
+      .eq("project_id", projectId)
+      .limit(1);
+
+    if (existingChapters && existingChapters.length > 0) {
+      return NextResponse.json({
+        success: true,
+        chapters_created: 0,
+        message: "Chapters already exist",
+      });
     }
 
     const blueprint = project.blueprint_output;
@@ -48,6 +58,7 @@ export async function POST(req: Request) {
         },
         index: number
       ) => ({
+        user_id: project.user_id,
         project_id: projectId,
         chapter_number: index + 1,
         title: chapter.title || `Chapter ${index + 1}`,
@@ -57,7 +68,7 @@ export async function POST(req: Request) {
       })
     );
 
-    const { error: insertError } = await supabase
+    const { error: insertError } = await supabaseAdmin
       .from("book_chapters")
       .insert(chapterRows);
 

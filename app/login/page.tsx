@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [message, setMessage] = useState("");
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
@@ -30,6 +31,29 @@ export default function LoginPage() {
     }
 
     router.push("/dashboard");
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setMessage("Enter your email first, then click Forgot Password.");
+      return;
+    }
+
+    setIsResetting(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setIsResetting(false);
+      return;
+    }
+
+    setMessage("Password reset email sent. Check your inbox.");
+    setIsResetting(false);
   }
 
   return (
@@ -97,8 +121,17 @@ export default function LoginPage() {
                 />
               </div>
 
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isResetting}
+                className="text-sm font-bold text-[#d4af37] transition hover:opacity-80 disabled:opacity-50"
+              >
+                {isResetting ? "Sending reset email..." : "Forgot password?"}
+              </button>
+
               {message ? (
-                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200">
+                <div className="rounded-2xl border border-[#d4af37]/30 bg-[#d4af37]/10 px-4 py-3 text-sm font-bold text-[#f5d76e]">
                   {message}
                 </div>
               ) : null}
