@@ -48,6 +48,15 @@ export default function DashboardPage() {
   const [books, setBooks] = useState<BookProject[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+async function handleSignOut() {
+  setIsSigningOut(true);
+  await supabase.auth.signOut();
+  router.push("/login");
+  router.refresh();
+}
 
   useEffect(() => {
     async function loadDashboard() {
@@ -121,11 +130,9 @@ const totalWords = bookChapters.reduce(
       Math.round((estimatedPages / targetPages) * 100)
     );
 
-    const completedChapters = bookChapters.filter((chapter) => {
-      const words = countWords(chapter.content);
-
-      return words / 275 >= targetPages / Math.max(bookChapters.length, 1);
-    }).length;
+    const completedChapters = bookChapters.filter((chapter) =>
+      chapter.content?.trim()
+    ).length;
 
     const latestChapter =
       [...bookChapters].sort((a, b) => {
@@ -147,21 +154,6 @@ const totalWords = bookChapters.reduce(
   });
 
   const totalBooks = enrichedBooks.length;
-  const totalWords = enrichedBooks.reduce((sum, book) => sum + book.totalWords, 0);
-  const totalPages = Math.round(totalWords / 275);
-  const averageProgress = totalBooks
-    ? Math.round(
-        enrichedBooks.reduce((sum, book) => sum + book.progress, 0) / totalBooks
-      )
-    : 0;
-
-  if (isLoading) {
-    return (
-      <main className="min-h-screen bg-[#f7f4ed] p-10 text-black">
-        <h1 className="text-3xl font-black">Loading dashboard...</h1>
-      </main>
-    );
-  }
 
   return (
     <main className="min-h-screen bg-[#f7f4ed] text-black">
@@ -181,48 +173,104 @@ const totalWords = bookChapters.reduce(
             + New Book Project
           </a>
 
-          <nav className="space-y-2 text-sm font-semibold text-white/70">
-            <a href="/dashboard" className="block rounded-2xl bg-white/12 px-4 py-3 text-white">
-              Dashboard
-            </a>
+         <nav className="space-y-2 text-sm font-semibold text-white/70">
+  <a
+    href="/dashboard"
+    className="block rounded-2xl bg-white/12 px-4 py-3 text-white"
+  >
+    Dashboard
+  </a>
 
-            <a
-              href="/my-books"
-              className="block rounded-2xl px-4 py-3 text-[#d4af37] underline underline-offset-4 hover:bg-white/10"
-            >
-              My Books
-            </a>
+  <a
+    href="/my-books"
+    className="block rounded-2xl px-4 py-3 text-white/70 hover:bg-white/10 hover:text-white"
+  >
+    My Books
+  </a>
 
-            <a href="/new-book" className="block rounded-2xl px-4 py-3 hover:bg-white/10">
-              New Book
-            </a>
-          </nav>
+  <div className="my-4 border-t border-white/10 pt-4">
+    <a
+      href="/settings"
+      className="block rounded-2xl px-4 py-3 text-white/60 hover:bg-white/10 hover:text-white"
+    >
+     - Settings
+    </a>
+  </div>
+</nav>
+
+<div className="mt-auto pt-12">
+  <button
+    type="button"
+    onClick={handleSignOut}
+    disabled={isSigningOut}
+    className="mx-auto block rounded-full border border-white/20 bg-black px-6 py-2 text-sm font-bold text-white/75 transition hover:border-white/40 hover:text-white disabled:opacity-50"
+  >
+    {isSigningOut ? "Signing Out..." : "Sign Out"}
+  </button>
+</div>
         </aside>
 
         <section className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#050505] px-5 py-4 shadow-lg shadow-black/20 sm:px-8 lg:hidden">
-            <div className="flex items-center justify-between gap-3">
-              <a href="/dashboard">
-                <img src="/9dayauthor-logo.png" alt="9 Day Author" className="h-11 w-auto" />
-              </a>
+          <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050505] px-5 py-4 shadow-lg shadow-black/20 lg:hidden">
+  <div className="flex items-center gap-4">
+    <button
+      type="button"
+      onClick={() => setMobileMenuOpen((current) => !current)}
+      className="rounded-full bg-black px-4 py-3 text-sm font-black text-[#d4af37]"
+      aria-label="Open menu"
+    >
+      ☰
+    </button>
 
-              <div className="flex items-center gap-2">
-                <a
-                  href="/my-books"
-                  className="rounded-xl border border-[#d4af37]/40 bg-black px-4 py-2 text-sm font-black text-[#d4af37]"
-                >
-                  My Books
-                </a>
+    <a href="/dashboard" className="block">
+      <img
+        src="/9dayauthor-logo.png"
+        alt="9 Day Author"
+        className="h-11 w-auto"
+      />
 
-                <a
-                  href="/new-book"
-                  className="rounded-xl bg-[#d4af37] px-4 py-2 text-sm font-bold text-black"
-                >
-                  + New Book
-                </a>
-              </div>
-            </div>
-          </header>
+      <p className="mt-1 translate-x-4 text-xs text-white/55">
+        From Idea to Amazon Author
+      </p>
+    </a>
+  </div>
+
+  {mobileMenuOpen ? (
+    <div className="mt-4 rounded-3xl border border-white/10 bg-black p-4">
+     <a
+  href="/my-books"
+  className="block rounded-2xl px-4 py-3 text-sm font-bold text-white/75 hover:bg-white/10 hover:text-white"
+>
+  My Books
+</a>
+
+<a
+  href="/new-book"
+  className="block rounded-2xl px-4 py-3 text-sm font-bold text-white/75 hover:bg-white/10 hover:text-white"
+>
+  New Book
+</a>
+
+<div className="my-3 border-t border-white/10 pt-3">
+  <a
+    href="/settings"
+    className="block rounded-2xl px-4 py-3 text-sm font-bold text-white/60 hover:bg-white/10 hover:text-white"
+  >
+   - Settings
+  </a>
+</div>
+
+      <button
+        type="button"
+        onClick={handleSignOut}
+        disabled={isSigningOut}
+       className="mx-auto mt-4 block rounded-full border border-white/20 bg-black px-6 py-2 text-sm font-bold text-white/75 transition hover:border-white/40 hover:text-white disabled:opacity-50"
+      >
+        {isSigningOut ? "Signing Out..." : "Sign Out"}
+      </button>
+    </div>
+  ) : null}
+</header>
 
           <div className="w-full px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#b38b16]">
@@ -236,30 +284,15 @@ const totalWords = bookChapters.reduce(
             <p className="mt-3 max-w-2xl text-lg leading-8 text-black/60">
               Manage your books, continue writing, review blueprints, and track your manuscript progress.
             </p>
-
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ["Books Created", String(totalBooks)],
-                ["Total Words", totalWords.toLocaleString()],
-                ["Estimated Pages", String(totalPages)],
-                ["Complete", `${averageProgress}%`],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-3xl border border-black/10 bg-white p-5 shadow-lg shadow-black/5">
-                  <div className="text-sm font-semibold text-black/45">{label}</div>
-                  <div className="mt-2 text-2xl font-black">{value}</div>
-                </div>
-              ))}
-            </div>
-
-            <section className="mt-10 rounded-[2rem] border border-black/5 bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.06)] md:p-8">
+            <section className="mt-8 rounded-[2rem] border border-black/5 bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.06)] md:p-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b38a2f]">
-                    My Books
+                    My Books ({totalBooks})
                   </p>
 
                   <h2 className="mt-2 text-3xl font-black text-black">
-                    Continue Building Your Library
+                    Continue Writing
                   </h2>
 
                   <p className="mt-2 max-w-xl text-black/60">
@@ -301,7 +334,7 @@ const totalWords = bookChapters.reduce(
                       <div className="mt-6 grid gap-3 sm:grid-cols-3">
                         <div className="rounded-2xl bg-white p-4">
                           <div className="text-xs font-bold uppercase tracking-[0.14em] text-black/40">
-                            Words
+                            Total Words
                           </div>
                           <div className="mt-1 text-xl font-black">
                             {book.totalWords.toLocaleString()}
@@ -310,10 +343,10 @@ const totalWords = bookChapters.reduce(
 
                         <div className="rounded-2xl bg-white p-4">
                           <div className="text-xs font-bold uppercase tracking-[0.14em] text-black/40">
-                            Pages Written
+                            Estimated Pages
                           </div>
                           <div className="mt-1 text-xl font-black">
-                            {book.estimatedPages} / {book.targetPages}
+                            {book.estimatedPages}
                           </div>
                         </div>
 

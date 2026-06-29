@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   buildBookContentBlocks,
   type BookContentBlock,
@@ -16,6 +16,7 @@ import {
   getLineHeightValue,
   type BookLineSpacingKey,
 } from "../../lib/bookLayoutConfig";
+import { supabase } from "../../lib/supabase";
 
 type Chapter = {
   id: string;
@@ -160,6 +161,138 @@ function buildPreviewSpreads(pages: MeasuredBookPage[]) {
   return spreads;
 }
 
+function normalizeDisplayTrimSize(value: string | null | undefined) {
+  const rawValue = String(value || "").trim();
+
+  if (rawValue === "5x8" || rawValue === "5 x 8") return "5 x 8";
+
+  if (
+    rawValue === "5.5x8.5" ||
+    rawValue === "5.5 x 8.5" ||
+    rawValue === "5.5 × 8.5"
+  ) {
+    return "5.5 x 8.5";
+  }
+
+  return "6 x 9";
+}
+
+function normalizeDatabaseTrimSize(value: string | null | undefined) {
+  const displayValue = normalizeDisplayTrimSize(value);
+
+  if (displayValue === "5 x 8") return "5x8";
+  if (displayValue === "5.5 x 8.5") return "5.5x8.5";
+
+  return "6x9";
+}
+
+function normalizeFontFamily(value: string | null | undefined) {
+  if (
+    value === "classic_serif" ||
+    value === "modern_serif" ||
+    value === "clean_sans"
+  ) {
+    return value;
+  }
+
+  return "classic_serif";
+}
+
+function getPreviewFontFamilyValue(value: string) {
+  if (value === "modern_serif") return `"Times New Roman", Times, serif`;
+  if (value === "clean_sans") return `Arial, Helvetica, sans-serif`;
+
+  return `Georgia, "Times New Roman", serif`;
+}
+
+function getFormattingTrimSizeStorageKey(projectId: string) {
+  return `formatting-trim-size-${projectId}`;
+}
+
+const LAST_SEEN_TRIM_SIZE_STORAGE_KEY = "formatting-last-seen-trim-size";
+const FALLBACK_TRIM_SIZE_STORAGE_KEY = "formatting-trim-size";
+
+function readStoredTrimSize(projectId: string) {
+  if (typeof window === "undefined") return "6 x 9";
+
+  return normalizeDisplayTrimSize(
+    window.localStorage.getItem(getFormattingTrimSizeStorageKey(projectId)) ||
+      window.localStorage.getItem(LAST_SEEN_TRIM_SIZE_STORAGE_KEY) ||
+      window.localStorage.getItem(FALLBACK_TRIM_SIZE_STORAGE_KEY) ||
+      "6 x 9"
+  );
+}
+
+function writeStoredTrimSize(projectId: string, trimSize: string) {
+  if (typeof window === "undefined") return;
+
+  const displayTrimSize = normalizeDisplayTrimSize(trimSize);
+
+  window.localStorage.setItem(
+    getFormattingTrimSizeStorageKey(projectId),
+    displayTrimSize
+  );
+  window.localStorage.setItem(
+    LAST_SEEN_TRIM_SIZE_STORAGE_KEY,
+    displayTrimSize
+  );
+  window.localStorage.setItem(FALLBACK_TRIM_SIZE_STORAGE_KEY, displayTrimSize);
+}
+
+function createFormattingContentSignature(
+  chapters: Chapter[],
+  sections: BookSection[]
+) {
+  const chapterSignature = chapters
+    .map(
+      (chapter) =>
+        `${chapter.id}:${chapter.word_count || 0}:${
+          chapter.content?.length || 0
+        }`
+    )
+    .join("|");
+
+  const sectionSignature = sections
+    .map(
+      (section) =>
+        `${section.id}:${section.include_in_book ? 1 : 0}:${
+          section.content?.length || 0
+        }`
+    )
+    .join("|");
+
+  return `${chapterSignature}::${sectionSignature}`;
+}
+
+function getFormattingLayoutCacheKey({
+  projectId,
+  trimSize,
+  fontFamily,
+  lineSpacing,
+  chapters,
+  sections,
+}: {
+  projectId: string;
+  trimSize: string;
+  fontFamily: string;
+  lineSpacing: string;
+  chapters: Chapter[];
+  sections: BookSection[];
+}) {
+  const signature = createFormattingContentSignature(chapters, sections);
+
+  return [
+    "formatting-layout",
+    projectId,
+    trimSize,
+    fontFamily,
+    lineSpacing,
+    chapters.length,
+    sections.length,
+    signature,
+  ].join("::");
+}
+
 function BookPageFrame({
   page,
   trimSize,
@@ -172,7 +305,7 @@ function BookPageFrame({
   lineSpacing: BookLineSpacingKey;
 }) {
   const config = getBookLayoutConfig(trimSize);
-  const resolvedFontFamily = getFontFamilyValue(fontFamily);
+  const resolvedFontFamily = getPreviewFontFamilyValue(fontFamily);
   const resolvedLineHeight = getLineHeightValue(lineSpacing);
   const isLeftPage = page?.isLeftPage || false;
 
@@ -223,7 +356,7 @@ function BookPageFrame({
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
-          padding-top: 2.15in;
+          padding-top: 1.05in;
           text-align: center;
         }
 
@@ -240,13 +373,6 @@ function BookPageFrame({
           letter-spacing: 0.18em;
           text-transform: uppercase;
           text-align: center;
-        }
-
-        .measured-book-content .book-title-rule {
-          width: 0.75in;
-          height: 1px;
-          background: #999;
-          margin: 0.65in 0 0.45in;
         }
 
         .measured-book-content .book-chapter-heading {
@@ -396,7 +522,27 @@ function OpenBookPreview({
   fontFamily: string;
   lineSpacing: BookLineSpacingKey;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(980);
   const config = getBookLayoutConfig(trimSize);
+
+  useLayoutEffect(() => {
+  const element = containerRef.current as HTMLDivElement | null;
+  if (!element) return;
+
+  const updateContainerWidth = () => {
+    setContainerWidth(element.clientWidth || 980);
+  };
+
+  updateContainerWidth();
+
+  const resizeObserver = new ResizeObserver(updateContainerWidth);
+  resizeObserver.observe(element);
+
+  return () => {
+    resizeObserver.disconnect();
+  };
+}, []);
 
   const pageWidthPx = config.pageWidthIn * 96;
   const pageHeightPx = config.pageHeightIn * 96;
@@ -411,16 +557,18 @@ function OpenBookPreview({
   const bookWidthPx = paperSpreadWidthPx + coverPaddingPx * 2;
   const bookHeightPx = paperSpreadHeightPx + coverPaddingPx * 2;
 
-  const scale = Math.min(0.78, 980 / bookWidthPx);
+  const availableWidthPx = Math.max(280, containerWidth - 16);
+  const scale = Math.min(0.78, availableWidthPx / bookWidthPx);
   const visibleWidthPx = bookWidthPx * scale;
   const visibleHeightPx = bookHeightPx * scale + 80;
 
   return (
-    <div className="w-full overflow-x-auto pb-12 pt-6 custom-scrollbar">
+    <div ref={containerRef} className="w-full overflow-hidden pb-12 pt-6">
       <div
         className="relative mx-auto"
         style={{
-          width: `${Math.max(visibleWidthPx, 920)}px`,
+          width: `${visibleWidthPx}px`,
+          maxWidth: "100%",
           height: `${visibleHeightPx}px`,
         }}
       >
@@ -479,7 +627,8 @@ function OpenBookPreview({
                     left: "50%",
                     width: "60px",
                     transform: "translateX(-50%)",
-                    background: "linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.08) 100%)",
+                    background:
+                      "linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.08) 100%)",
                     pointerEvents: "none",
                     zIndex: 99999,
                   }}
@@ -547,8 +696,6 @@ function OpenBookPreview({
                   )}
                 </div>
               </div>
-
-              <div className="absolute bottom-[-18px] left-1/2 h-20 w-8 -translate-x-1/2 rounded-b-full bg-[#5f35d6] shadow-[0_10px_20px_rgba(95,53,214,0.35)]" />
             </div>
           </div>
         </div>
@@ -571,21 +718,124 @@ export default function FormattingWorkspace({
   chapters: Chapter[];
   sections: BookSection[];
 }) {
-  const [trimSize, setTrimSize] = useState("6 x 9");
-  const [fontFamily, setFontFamily] = useState("Garamond");
+  const [trimSize, setTrimSize] = useState(() => readStoredTrimSize(projectId));
+  const [fontFamily, setFontFamily] = useState("classic_serif");
   const lineSpacing: BookLineSpacingKey = "Standard";
+
+  const [isSavingFormatting, setIsSavingFormatting] = useState(false);
+  const [formattingMessage, setFormattingMessage] = useState("");
 
   const [layout, setLayout] = useState<MeasuredBookLayout | null>(null);
   const [isLayoutLoading, setIsLayoutLoading] = useState(true);
   const [layoutError, setLayoutError] = useState("");
 
+  const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
+
   const spreadStorageKey = `formatting-spread-${projectId}`;
   const [currentSpreadIndex, setCurrentSpreadIndex] = useState(0);
   const [hasRestoredSpread, setHasRestoredSpread] = useState(false);
 
+  useLayoutEffect(() => {
+    const storedTrimSize = readStoredTrimSize(projectId);
+
+    setTrimSize((currentTrimSize) =>
+      currentTrimSize === storedTrimSize ? currentTrimSize : storedTrimSize
+    );
+  }, [projectId]);
+
+  useEffect(() => {
+    writeStoredTrimSize(projectId, trimSize);
+  }, [projectId, trimSize]);
+
+  async function saveFormattingSettings() {
+    try {
+      setIsSavingFormatting(true);
+      setFormattingMessage("Saving formatting settings...");
+
+      const normalizedTrimSize = normalizeDatabaseTrimSize(trimSize);
+
+      writeStoredTrimSize(projectId, trimSize);
+
+      const { error } = await supabase
+        .from("book_projects")
+        .update({
+          compiled_trim_size: normalizedTrimSize,
+          compiled_font_family: fontFamily,
+        })
+        .eq("id", projectId);
+
+      if (error) {
+        throw error;
+      }
+
+      writeStoredTrimSize(projectId, trimSize);
+      setFormattingMessage("Formatting settings saved.");
+
+      window.setTimeout(() => {
+        setFormattingMessage("");
+      }, 3500);
+    } catch (error) {
+      console.error(error);
+      setFormattingMessage("Could not save formatting settings.");
+    } finally {
+      setIsSavingFormatting(false);
+    }
+  }
+
+  useEffect(() => {
+    async function loadSavedFormattingSettings() {
+      if (!projectId) return;
+
+      const { data, error } = await supabase
+        .from("book_projects")
+        .select("compiled_trim_size, compiled_font_family")
+        .eq("id", projectId)
+        .single();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const displayTrimSize = normalizeDisplayTrimSize(
+        data?.compiled_trim_size || "6x9"
+      );
+      const savedFontFamily = normalizeFontFamily(data?.compiled_font_family);
+
+      const storedTrimSize = readStoredTrimSize(projectId);
+
+      if (!storedTrimSize) {
+        setTrimSize(displayTrimSize);
+        writeStoredTrimSize(projectId, displayTrimSize);
+      }
+
+      setFontFamily(savedFontFamily);
+    }
+
+    loadSavedFormattingSettings();
+  }, [projectId]);
+
   const sortedChapters = useMemo(() => {
     return [...chapters].sort((a, b) => a.chapter_number - b.chapter_number);
   }, [chapters]);
+
+  const layoutCacheKey = useMemo(() => {
+    return getFormattingLayoutCacheKey({
+      projectId,
+      trimSize,
+      fontFamily,
+      lineSpacing,
+      chapters: sortedChapters,
+      sections,
+    });
+  }, [
+    projectId,
+    trimSize,
+    fontFamily,
+    lineSpacing,
+    sortedChapters,
+    sections,
+  ]);
 
   const contentBlocks = useMemo(() => {
     return buildBookContentBlocks({
@@ -605,8 +855,29 @@ export default function FormattingWorkspace({
 
     async function buildLayout() {
       try {
-        setIsLayoutLoading(true);
         setLayoutError("");
+
+        const cached =
+          typeof window !== "undefined"
+            ? sessionStorage.getItem(layoutCacheKey)
+            : null;
+
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached) as MeasuredBookLayout;
+
+            if (!isCancelled) {
+              setLayout(parsed);
+              setIsLayoutLoading(false);
+            }
+
+            return;
+          } catch (error) {
+            console.warn("Formatting cache invalid", error);
+          }
+        }
+
+        setIsLayoutLoading(true);
 
         const measuredLayout = await buildMeasuredBookLayout({
           blocks: contentBlocks,
@@ -618,12 +889,19 @@ export default function FormattingWorkspace({
         if (isCancelled) return;
 
         setLayout(measuredLayout);
+
+        try {
+          sessionStorage.setItem(layoutCacheKey, JSON.stringify(measuredLayout));
+        } catch (error) {
+          console.warn("Could not cache formatting layout", error);
+        }
       } catch (error) {
         console.error(error);
 
         if (isCancelled) return;
 
         setLayout(null);
+
         setLayoutError(
           error instanceof Error
             ? error.message
@@ -641,7 +919,7 @@ export default function FormattingWorkspace({
     return () => {
       isCancelled = true;
     };
-  }, [contentBlocks, trimSize, fontFamily, lineSpacing]);
+  }, [contentBlocks, trimSize, fontFamily, lineSpacing, layoutCacheKey]);
 
   const pages = layout?.pages || [];
   const previewSpreads = useMemo(() => buildPreviewSpreads(pages), [pages]);
@@ -703,19 +981,36 @@ export default function FormattingWorkspace({
     );
   }
 
+  function jumpToSection(pageNumber: number) {
+    goToPage(pageNumber);
+    setSectionPickerOpen(false);
+
+    window.setTimeout(() => {
+      document
+        .getElementById("live-book-preview")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
   return (
-    <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
-      <div>
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-[#b38b16]">
+    <div
+      className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8"
+      onClick={() => setSectionPickerOpen(false)}
+    >
+      <div className="rounded-[2rem] border border-black/10 bg-white p-6 shadow-xl shadow-black/5 sm:p-8">
+        <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#b38b16]">
           Step 6 of 9
-        </p>
+        </div>
 
-        <h1 className="mt-3 text-5xl font-black tracking-tight">
-          Format Your Book
-        </h1>
+        <h1 className="mt-2 text-4xl font-black">Formatting</h1>
 
-        <p className="mt-4 max-w-3xl text-lg leading-8 text-black/60">
-          Choose your book’s interior style and preview how the pages will look before creating your cover.
+        <p className="mt-4 max-w-2xl text-lg leading-8 text-black/60">
+          Choose your book&apos;s interior style and preview how the pages will
+          look before creating your cover.
+          <br />
+          <br />
+          ⚠️ Page count in this preview is an estimate. Your final page count
+          will be calculated in the Finalize Manuscript step.
         </p>
       </div>
 
@@ -733,14 +1028,19 @@ export default function FormattingWorkspace({
             <select
               value={trimSize}
               onChange={(event) => {
-                setTrimSize(event.target.value);
+                const nextTrimSize = normalizeDisplayTrimSize(
+                  event.target.value
+                );
+
+                setTrimSize(nextTrimSize);
+                writeStoredTrimSize(projectId, nextTrimSize);
                 setCurrentSpreadIndex(0);
               }}
               className="mt-3 w-full rounded-2xl border border-black/10 bg-[#faf8f3] px-5 py-4 text-lg outline-none"
             >
-              <option>5 x 8</option>
-              <option>5.5 x 8.5</option>
-              <option>6 x 9</option>
+              <option value="5 x 8">5 x 8</option>
+              <option value="5.5 x 8.5">5.5 x 8.5</option>
+              <option value="6 x 9">6 x 9 (Recommended)</option>
             </select>
           </div>
 
@@ -752,21 +1052,47 @@ export default function FormattingWorkspace({
             <select
               value={fontFamily}
               onChange={(event) => {
-                setFontFamily(event.target.value);
-                setCurrentSpreadIndex(0);
+                setFontFamily(normalizeFontFamily(event.target.value));
               }}
               className="mt-3 w-full rounded-2xl border border-black/10 bg-[#faf8f3] px-5 py-4 text-lg outline-none"
             >
-              <option>Garamond</option>
-              <option>Georgia</option>
-              <option>Times New Roman</option>
-              <option>Baskerville</option>
+              <option value="classic_serif">Classic Serif</option>
+              <option value="modern_serif">Modern Serif</option>
+              <option value="clean_sans">Clean Sans</option>
             </select>
           </div>
         </div>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={saveFormattingSettings}
+            disabled={isSavingFormatting}
+            className="rounded-2xl bg-black px-6 py-4 text-sm font-black text-[#d4af37] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSavingFormatting ? "Saving..." : "Save Formatting Settings"}
+          </button>
+
+          {formattingMessage ? (
+            <p
+              className={`text-sm font-bold ${
+                formattingMessage.includes("saved")
+                  ? "text-green-700"
+                  : formattingMessage.includes("Could not")
+                  ? "text-red-600"
+                  : "text-black/60"
+              }`}
+            >
+              {formattingMessage}
+            </p>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-8 rounded-[2rem] border border-black/10 bg-[#e9e2d0] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
+      <div
+        id="live-book-preview"
+        className="mt-8 rounded-[2rem] border border-black/10 bg-[#e9e2d0] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)]"
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.18em] text-[#7a5a16]">
@@ -802,7 +1128,8 @@ export default function FormattingWorkspace({
               type="button"
               onClick={goToNextSpread}
               disabled={
-                isLayoutLoading || currentSpreadIndex >= previewSpreads.length - 1
+                isLayoutLoading ||
+                currentSpreadIndex >= previewSpreads.length - 1
               }
               className="rounded-2xl bg-black px-5 py-3 font-black text-[#d4af37] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -824,7 +1151,7 @@ export default function FormattingWorkspace({
                 <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-black/10 border-t-[#6a4cff]" />
 
                 <p className="mt-5 font-black text-black/70">
-                  Measuring your book pages...
+                  Building your estimated book preview...
                 </p>
               </div>
             </div>
@@ -840,35 +1167,48 @@ export default function FormattingWorkspace({
         </div>
       </div>
 
-      <div className="mt-8 rounded-[2rem] border border-black/10 bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
+      <div
+        className="mt-8 rounded-[2rem] border border-black/10 bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.06)]"
+        onClick={(event) => event.stopPropagation()}
+      >
         <label className="text-sm font-black uppercase tracking-[0.18em] text-[#b38b16]">
           Jump to Section
         </label>
 
-        <select
-          disabled={isLayoutLoading || !assemblyItems.length}
-          onChange={(event) => {
-            const selectedPage = Number(event.target.value);
-            if (Number.isFinite(selectedPage)) {
-              goToPage(selectedPage);
-            }
-          }}
-          className="mt-4 w-full rounded-2xl border border-black/10 bg-[#faf8f3] px-5 py-4 text-lg font-bold outline-none disabled:opacity-50"
-          defaultValue=""
-        >
-          <option value="" disabled>
-            Select a section...
-          </option>
+        <div className="relative mt-4">
+          <button
+            type="button"
+            disabled={isLayoutLoading || !assemblyItems.length}
+            onClick={() => setSectionPickerOpen((current) => !current)}
+            className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-[#faf8f3] px-5 py-4 text-left text-lg font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span>Select a Section</span>
+            <span className="text-xl">⌄</span>
+          </button>
 
-          {assemblyItems.map((item) => (
-            <option key={item.id} value={item.startPage}>
-              {item.type === "chapter"
-                ? `${item.label}: ${item.title}`
-                : item.title}{" "}
-              — Page {item.startPage}
-            </option>
-          ))}
-        </select>
+          {sectionPickerOpen ? (
+            <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-black/10 bg-white p-2 shadow-2xl">
+              {assemblyItems.map((item, index) => (
+                <button
+                  key={`${item.id}-${item.startPage}-${index}`}
+                  type="button"
+                  onClick={() => jumpToSection(item.startPage)}
+                  className="block w-full rounded-xl px-4 py-4 text-left hover:bg-[#faf8f3]"
+                >
+                  <div className="font-semibold">
+                    {item.type === "chapter"
+                      ? `${item.label}: ${item.title}`
+                      : item.title ?? ""}
+                  </div>
+
+                  <div className="mt-1 text-sm text-black/50">
+                    Page {item.startPage}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

@@ -58,8 +58,8 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen bg-[#050505] px-5 py-10 text-white sm:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-6xl items-center justify-center">
-        <div className="grid w-full gap-10 lg:grid-cols-[0.9fr_1fr] lg:items-center">
+      <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-6xl items-start justify-center pt-12 lg:pt-16">
+       <div className="grid w-full gap-10 lg:grid-cols-[0.9fr_1fr] lg:items-start">
           <div>
             <a href="/">
               <img

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import puppeteer, { type Browser } from "puppeteer";
+import chromium from "@sparticuz/chromium";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 import {
   calculateCoverLayout,
@@ -8,19 +8,31 @@ import {
   type CoverTrimSizeKey,
 } from "../../../lib/coverCalculator";
 
+async function launchBrowser() {
+  if (process.env.VERCEL) {
+    const puppeteerCore = await import("puppeteer-core");
+    const chrome = chromium as any;
+
+    return puppeteerCore.default.launch({
+      args: chrome.args,
+      defaultViewport: chrome.defaultViewport,
+      executablePath: await chrome.executablePath(),
+      headless: chrome.headless,
+    });
+  }
+
+  const puppeteer = await import("puppeteer");
+
+  return puppeteer.default.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type CoverPanelKey = "back" | "spine" | "front";
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+const INCH_TO_PX = 96;
 
 function safeFilename(value: string | null | undefined) {
   return String(value || "cover")
@@ -29,372 +41,37 @@ function safeFilename(value: string | null | undefined) {
     .toLowerCase();
 }
 
-function getLayers(settings: any, format: CoverFormat) {
-  const layers = settings?.cover_layers;
+function normalizeCoverTrimSize(value: unknown): CoverTrimSizeKey | null {
+  if (typeof value !== "string") return null;
 
-  if (Array.isArray(layers)) return layers;
+  const cleaned = value
+    .toLowerCase()
+    .replace(/×/g, "x")
+    .replace(/\s+/g, "")
+    .trim();
 
-  if (layers && typeof layers === "object") {
-    return layers[format] || layers.paperback || [];
-  }
+  if (cleaned === "5x8") return "5x8";
+  if (cleaned === "5.5x8.5" || cleaned === "5.5x8.5in") return "5.5x8.5";
+  if (cleaned === "6x9") return "6x9";
 
-  return [];
+  return null;
 }
 
-function getPanelRect(panel: CoverPanelKey, layout: any) {
-  if (panel === "back") {
-    return {
-      left: 0,
-      top: 0,
-      width: layout.backCoverWidthIn + layout.bleedIn,
-      height: layout.fullWrapHeightIn,
-    };
-  }
-
-  if (panel === "spine") {
-    return {
-      left: layout.spineStartIn,
-      top: 0,
-      width: layout.spineWidthIn,
-      height: layout.fullWrapHeightIn,
-    };
-  }
-
-  return {
-    left: layout.frontCoverStartIn - layout.safeMarginIn,
-    top: 0,
-    width: layout.frontCoverWidthIn + layout.bleedIn,
-    height: layout.fullWrapHeightIn,
-  };
-}
-
-function renderPanelBackground(
-  panel: CoverPanelKey,
-  settings: any,
-  layout: any,
-  hasFullWrapBackground: boolean
-) {
-  const panelStyles = settings?.panel_styles || {};
-  const style = panelStyles[panel] || {};
-  const rect = getPanelRect(panel, layout);
-
-  const bgColor = style.backgroundColor || "#f2ead8";
-  const bgImage = style.backgroundImage || "";
-  const bgFit = style.backgroundFit || "cover";
-  const bgX = Number(style.backgroundX || 0);
-  const bgY = Number(style.backgroundY || 0);
-  const bgScale = Number(style.backgroundScale || 100);
-
-  // Match the live Cover Creator behavior:
-  // - If a full-wrap background exists, panel color should not cover it.
-  // - If no full-wrap background exists, panel color remains visible.
-  // - Panel-specific images still render above either option.
-  const background = hasFullWrapBackground ? "transparent" : bgColor;
-
-  return `
-    <div
-      class="panel-bg"
-      style="
-        left:${rect.left}in;
-        top:${rect.top}in;
-        width:${rect.width}in;
-        height:${rect.height}in;
-        background:${escapeHtml(background)};
-      "
-    >
-      ${
-        bgImage
-          ? `<img
-              src="${escapeHtml(bgImage)}"
-              style="
-                position:absolute;
-                inset:0;
-                width:100%;
-                height:100%;
-                object-fit:${escapeHtml(bgFit)};
-                transform:translate(${bgX}px, ${bgY}px) scale(${bgScale / 100});
-                transform-origin:center;
-              "
-            />`
-          : ""
-      }
-    </div>
-  `;
-}
-
-function renderLayer(layer: any, layout: any) {
-  if (!layer || !layer.panel) return "";
-
-  // KDP adds the real barcode during upload. Do not export our preview placeholder.
-  if (
-    layer.type === "image" &&
-    typeof layer.src === "string" &&
-    layer.src.includes("barcode-placeholder")
-  ) {
-    return "";
-  }
-
-  const panel = layer.panel as CoverPanelKey;
-  const rect = getPanelRect(panel, layout);
-
-  const left = rect.left + (Number(layer.x || 0) / 100) * rect.width;
-  const top = rect.top + (Number(layer.y || 0) / 100) * rect.height;
-  const width = (Number(layer.width || 10) / 100) * rect.width;
-  const height = (Number(layer.height || 10) / 100) * rect.height;
-
-  const zIndex = Number(layer.zIndex || 20);
-  const opacity = Number(layer.opacity ?? 1);
-
-  if (layer.type === "image") {
-    const imageScale = Number(layer.imageScale || 100);
-    const imageX = Number(layer.imageX || 0);
-    const imageY = Number(layer.imageY || 0);
-
-    return `
-      <div
-        class="cover-layer"
-        style="
-          left:${left}in;
-          top:${top}in;
-          width:${width}in;
-          height:${height}in;
-          opacity:${opacity};
-          z-index:${zIndex};
-          overflow:hidden;
-        "
-      >
-        <img
-          src="${escapeHtml(layer.src)}"
-          style="
-            position:absolute;
-            left:0;
-            top:0;
-            width:${imageScale}%;
-            height:auto;
-            max-width:none;
-            max-height:none;
-            transform:translate(${imageX}px, ${imageY}px);
-            transform-origin:top left;
-            display:block;
-          "
-        />
-      </div>
-    `;
-  }
-
-  if (layer.type === "text") {
-    const fontFamily = layer.fontFamily || "Georgia";
-    const fontSize = Number(layer.fontSize || 14);
-    const fontWeight = Number(layer.fontWeight || 700);
-    const fontStyle = layer.fontStyle || "normal";
-    const color = layer.color || "#111111";
-    const textAlign = layer.textAlign || "center";
-    const lineHeight = Number(layer.lineHeight || 1.2);
-    const letterSpacing = Number(layer.letterSpacing || 0);
-    const rotation = Number(layer.rotation || 0);
-
-    if (panel === "spine" || rotation !== 0) {
-      return `
-        <div
-          class="cover-layer"
-          style="
-            left:${left}in;
-            top:${top}in;
-            width:${width}in;
-            height:${height}in;
-            z-index:${zIndex};
-            opacity:${opacity};
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            overflow:visible;
-          "
-        >
-          <div
-            style="
-              transform:rotate(${rotation || 90}deg);
-              transform-origin:center;
-              white-space:nowrap;
-              font-family:${escapeHtml(fontFamily)}, serif;
-              font-size:${fontSize}px;
-              font-weight:${fontWeight};
-              font-style:${fontStyle};
-              color:${escapeHtml(color)};
-              letter-spacing:${letterSpacing}em;
-              text-align:center;
-              text-transform:${panel === "spine" ? "uppercase" : "none"};
-            "
-          >
-            ${escapeHtml(layer.text)}
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div
-        class="cover-layer"
-        style="
-          left:${left}in;
-          top:${top}in;
-          width:${width}in;
-          max-width:${width}in;
-          height:${height}in;
-          display:block;
-          align-items:center;
-          justify-content:center;
-          z-index:${zIndex};
-          opacity:${opacity};
-          font-family:${escapeHtml(fontFamily)}, serif;
-          font-size:${fontSize}px;
-          font-weight:${fontWeight};
-          font-style:${fontStyle};
-          color:${escapeHtml(color)};
-          text-align:${escapeHtml(textAlign)};
-          line-height:${lineHeight};
-          letter-spacing:${letterSpacing}em;
-          white-space:pre-wrap;
-          overflow:visible;
-        "
-      >
-        ${escapeHtml(layer.text)}
-      </div>
-    `;
-  }
-
-  return "";
-}
-
-function renderCoverHtml({
-  project,
-  settings,
-  format,
-}: {
-  project: any;
-  settings: any;
-  format: CoverFormat;
-}) {
-  const trimSize = (settings?.trim_size ||
-    project.compiled_trim_size ||
-    "6x9") as CoverTrimSizeKey;
-
-  const paperType = (settings?.paper_type || "white") as CoverPaperType;
-  const pageCount = project.compiled_page_count || settings?.page_count || 150;
-
-  const layout = calculateCoverLayout({
-    format,
-    trimSize,
-    paperType,
-    pageCount,
-  });
-
-  const layers = getLayers(settings, format);
-
-  const fullWrapBackground = settings?.background_image_url || "";
-  const imageScale = Number(settings?.image_scale || 100);
-  const imageX = Number(settings?.image_x || 0);
-  const imageY = Number(settings?.image_y || 0);
-  const fitMode = settings?.image_fit_mode || "cover";
-
-  const layerHtml = layers
-    .slice()
-    .sort((a: any, b: any) => Number(a.zIndex || 0) - Number(b.zIndex || 0))
-    .map((layer: any) => renderLayer(layer, layout))
-    .join("");
-
-  const hasFullWrapBackground = Boolean(fullWrapBackground);
-
-  return `
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <style>
-    @page {
-      size: ${layout.fullWrapWidthIn}in ${layout.fullWrapHeightIn}in;
-      margin: 0;
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      width: ${layout.fullWrapWidthIn}in;
-      height: ${layout.fullWrapHeightIn}in;
-      font-family: Georgia, serif;
-      background: white;
-    }
-
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-
-    .wrap {
-      position: relative;
-      width: ${layout.fullWrapWidthIn}in;
-      height: ${layout.fullWrapHeightIn}in;
-      overflow: hidden;
-      background: #f2ead8;
-    }
-
-    .full-bg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: ${escapeHtml(fitMode)};
-      transform: translate(${imageX}px, ${imageY}px) scale(${imageScale / 100});
-      transform-origin: center;
-      z-index: 1;
-    }
-
-    .panel-bg {
-      position: absolute;
-      overflow: hidden;
-      z-index: 2;
-    }
-
-    .cover-layer {
-      position: absolute;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="wrap">
-    ${
-      fullWrapBackground
-        ? `<img class="full-bg" src="${escapeHtml(fullWrapBackground)}" />`
-        : ""
-    }
-
-    ${renderPanelBackground("back", settings, layout, hasFullWrapBackground)}
-    ${renderPanelBackground("spine", settings, layout, hasFullWrapBackground)}
-    ${renderPanelBackground("front", settings, layout, hasFullWrapBackground)}
-
-    ${layerHtml}
-  </div>
-</body>
-</html>
-`;
+function normalizeCoverFormat(value: unknown): CoverFormat {
+  return value === "hardcover" ? "hardcover" : "paperback";
 }
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const projectId = url.searchParams.get("projectId");
-  const format = (url.searchParams.get("format") || "paperback") as CoverFormat;
+  const format = normalizeCoverFormat(url.searchParams.get("format"));
+  const requestedTrimSize = normalizeCoverTrimSize(url.searchParams.get("trimSize"));
 
   if (!projectId) {
     return Response.json({ error: "Missing projectId" }, { status: 400 });
   }
 
-  if (format !== "paperback" && format !== "hardcover") {
-    return Response.json({ error: "Invalid cover format" }, { status: 400 });
-  }
-
-  let browser: Browser | null = null;
+  let browser: any = null;
 
   try {
     const { data: project, error: projectError } = await supabaseAdmin
@@ -413,9 +90,12 @@ export async function GET(req: NextRequest) {
       .eq("project_id", projectId)
       .maybeSingle();
 
-    const trimSize = (settings?.trim_size ||
-      project.compiled_trim_size ||
-      "6x9") as CoverTrimSizeKey;
+    const trimSize = (
+      requestedTrimSize ||
+      normalizeCoverTrimSize(settings?.trim_size) ||
+      normalizeCoverTrimSize(project.compiled_trim_size) ||
+      "6x9"
+    ) as CoverTrimSizeKey;
 
     const paperType = (settings?.paper_type || "white") as CoverPaperType;
     const pageCount = project.compiled_page_count || settings?.page_count || 150;
@@ -427,26 +107,54 @@ export async function GET(req: NextRequest) {
       pageCount,
     });
 
-    const html = renderCoverHtml({
-      project,
-      settings,
-      format,
-    });
+    const origin = url.origin;
+    const targetUrl = new URL("/cover-export-render", origin);
 
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    targetUrl.searchParams.set("projectId", projectId);
+    targetUrl.searchParams.set("format", format);
+    targetUrl.searchParams.set("trimSize", trimSize);
+
+    browser = await launchBrowser();
 
     const page = await browser.newPage();
 
     await page.setViewport({
-      width: Math.ceil(layout.fullWrapWidthIn * 96),
-      height: Math.ceil(layout.fullWrapHeightIn * 96),
+      width: Math.ceil(layout.fullWrapWidthIn * INCH_TO_PX),
+      height: Math.ceil(layout.fullWrapHeightIn * INCH_TO_PX),
       deviceScaleFactor: 1,
     });
 
-    await page.setContent(html);
+    const response = await page.goto(targetUrl.toString(), {
+      waitUntil: "networkidle0",
+      timeout: 120000,
+    });
+
+    if (!response || !response.ok()) {
+      throw new Error(
+        `Cover render page failed: ${response?.status() || "no response"}`
+      );
+    }
+
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+
+      await Promise.all(
+        Array.from(document.images).map((img) => {
+          if (img.complete) return Promise.resolve();
+
+          return new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          });
+        })
+      );
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+    });
 
     const pdfBuffer = await page.pdf({
       width: `${layout.fullWrapWidthIn}in`,
@@ -471,6 +179,9 @@ export async function GET(req: NextRequest) {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
+        "X-Cover-Trim-Size": trimSize,
+        "X-Cover-Format": format,
+        "X-Cover-Page-Count": String(pageCount),
       },
     });
   } catch (error) {

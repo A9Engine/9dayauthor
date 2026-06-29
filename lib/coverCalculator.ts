@@ -128,7 +128,7 @@ export function calculateHardcoverSpineWidthEstimate({
     paperType,
   });
 
-  return roundToFour(paperbackSpineWidth + 0.125);
+  return roundToFour(paperbackSpineWidth + 0.193);
 }
 
 export function calculateSpineWidth({
@@ -184,15 +184,18 @@ export function calculateCoverLayout({
   const bleedIn = getBleedIn(format);
   const safeMarginIn = getSafeMarginIn();
 
-  const backCoverStartIn = bleedIn;
+  const horizontalWrapIn = format === "hardcover" ? 0.7878 : bleedIn;
+  const verticalWrapIn = format === "hardcover" ? 0.7085 : bleedIn;
+
+  const backCoverStartIn = horizontalWrapIn;
   const spineStartIn = backCoverStartIn + trim.widthIn;
   const frontCoverStartIn = spineStartIn + spineWidthIn;
 
   const fullWrapWidthIn = roundToFour(
-    trim.widthIn + spineWidthIn + trim.widthIn + bleedIn * 2
+    trim.widthIn + spineWidthIn + trim.widthIn + horizontalWrapIn * 2
   );
 
-  const fullWrapHeightIn = roundToFour(trim.heightIn + bleedIn * 2);
+  const fullWrapHeightIn = roundToFour(trim.heightIn + verticalWrapIn * 2);
 
   const isSpineTextAllowed = normalizedPageCount >= 100;
 

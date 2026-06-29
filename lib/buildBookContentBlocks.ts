@@ -75,24 +75,8 @@ All rights reserved.
 No part of this book may be reproduced, stored in a retrieval system, or transmitted in any form without prior written permission from the author, except for brief quotations used in reviews or commentary.`;
   }
 
-  if (sectionType === "dedication") {
-    return "";
-  }
-
-  if (sectionType === "introduction") {
-    return "";
-  }
-
-  if (sectionType === "acknowledgments") {
-    return "";
-  }
-
   if (sectionType === "about_author") {
     return `${authorName} is the author of ${bookTitle}.`;
-  }
-
-  if (sectionType === "what_comes_next") {
-    return "";
   }
 
   return "";
@@ -110,14 +94,63 @@ function normalizeSectionType(sectionType: string): BookContentBlockType {
   return "section";
 }
 
+function isProtectedFrontMatter(sectionType: string) {
+  return ["title_page", "copyright", "dedication"].includes(sectionType);
+}
+
+function isIntroduction(sectionType: string) {
+  return sectionType === "introduction";
+}
+
+function isBackMatter(sectionType: string) {
+  return (
+    sectionType === "acknowledgments" ||
+    sectionType === "about_author" ||
+    sectionType === "what_comes_next" ||
+    sectionType.startsWith("custom_back")
+  );
+}
+
+function isCustomFrontMatter(sectionType: string) {
+  return sectionType.startsWith("custom_front");
+}
+
 function shouldIncludeSectionInToc(sectionType: BookContentBlockType) {
   return (
     sectionType === "introduction" ||
     sectionType === "chapter" ||
     sectionType === "acknowledgments" ||
     sectionType === "about_author" ||
-    sectionType === "what_comes_next"
+    sectionType === "what_comes_next" ||
+    sectionType === "section"
   );
+}
+
+function makeSectionBlock({
+  section,
+  project,
+}: {
+  section: RawBookSection;
+  project: RawBookProject;
+}): BookContentBlock {
+  const type = normalizeSectionType(section.section_type);
+  const content =
+    cleanText(section.content) ||
+    getFallbackSectionContent({
+      sectionType: section.section_type,
+      project,
+    });
+
+  return {
+    id: `section-${section.id}`,
+    type,
+    title: section.title,
+    content,
+    sortOrder: section.sort_order,
+    sourceId: section.id,
+    includeInToc: shouldIncludeSectionInToc(type),
+    forceNewPage: true,
+  };
 }
 
 export function buildBookContentBlocks({
@@ -140,42 +173,27 @@ export function buildBookContentBlocks({
     )
     .sort((a, b) => a.sort_order - b.sort_order);
 
-  const frontSections = activeSections.filter(
-    (section) => section.sort_order < 900
+  const preTocFrontSections = activeSections.filter(
+    (section) =>
+      isProtectedFrontMatter(section.section_type) ||
+      isCustomFrontMatter(section.section_type)
   );
 
-  const backSections = activeSections.filter(
-    (section) => section.sort_order >= 900
+  const introductionSections = activeSections.filter((section) =>
+    isIntroduction(section.section_type)
+  );
+
+  const backSections = activeSections.filter((section) =>
+    isBackMatter(section.section_type)
   );
 
   const sortedChapters = [...chapters].sort(
     (a, b) => a.chapter_number - b.chapter_number
   );
 
-  frontSections
-    .filter((section) =>
-      ["title_page", "copyright", "dedication"].includes(section.section_type)
-    )
-    .forEach((section) => {
-      const type = normalizeSectionType(section.section_type);
-      const content =
-        cleanText(section.content) ||
-        getFallbackSectionContent({
-          sectionType: section.section_type,
-          project,
-        });
-
-      blocks.push({
-        id: `section-${section.id}`,
-        type,
-        title: section.title,
-        content,
-        sortOrder: section.sort_order,
-        sourceId: section.id,
-        includeInToc: shouldIncludeSectionInToc(type),
-        forceNewPage: true,
-      });
-    });
+  preTocFrontSections.forEach((section) => {
+    blocks.push(makeSectionBlock({ section, project }));
+  });
 
   if (includeTableOfContents) {
     blocks.push({
@@ -189,28 +207,9 @@ export function buildBookContentBlocks({
     });
   }
 
-  frontSections
-    .filter((section) => section.section_type === "introduction")
-    .forEach((section) => {
-      const type = normalizeSectionType(section.section_type);
-      const content =
-        cleanText(section.content) ||
-        getFallbackSectionContent({
-          sectionType: section.section_type,
-          project,
-        });
-
-      blocks.push({
-        id: `section-${section.id}`,
-        type,
-        title: section.title,
-        content,
-        sortOrder: section.sort_order,
-        sourceId: section.id,
-        includeInToc: shouldIncludeSectionInToc(type),
-        forceNewPage: true,
-      });
-    });
+  introductionSections.forEach((section) => {
+    blocks.push(makeSectionBlock({ section, project }));
+  });
 
   sortedChapters.forEach((chapter) => {
     blocks.push({
@@ -227,24 +226,7 @@ export function buildBookContentBlocks({
   });
 
   backSections.forEach((section) => {
-    const type = normalizeSectionType(section.section_type);
-    const content =
-      cleanText(section.content) ||
-      getFallbackSectionContent({
-        sectionType: section.section_type,
-        project,
-      });
-
-    blocks.push({
-      id: `section-${section.id}`,
-      type,
-      title: section.title,
-      content,
-      sortOrder: section.sort_order,
-      sourceId: section.id,
-      includeInToc: shouldIncludeSectionInToc(type),
-      forceNewPage: true,
-    });
+    blocks.push(makeSectionBlock({ section, project }));
   });
 
   return blocks;

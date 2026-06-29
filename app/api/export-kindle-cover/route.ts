@@ -1,6 +1,27 @@
 import { NextRequest } from "next/server";
-import puppeteer, { type Browser } from "puppeteer";
+import chromium from "@sparticuz/chromium";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
+
+async function launchBrowser() {
+  if (process.env.VERCEL) {
+    const puppeteerCore = await import("puppeteer-core");
+    const chrome = chromium as any;
+
+    return puppeteerCore.default.launch({
+      args: chrome.args,
+      defaultViewport: chrome.defaultViewport,
+      executablePath: await chrome.executablePath(),
+      headless: chrome.headless,
+    });
+  }
+
+  const puppeteer = await import("puppeteer");
+
+  return puppeteer.default.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -224,12 +245,13 @@ function renderKindleCoverHtml({ settings }: { settings: any }) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
+  const saveOnly = searchParams.get("saveOnly") === "true";
 
   if (!projectId) {
     return Response.json({ error: "Missing projectId" }, { status: 400 });
   }
 
-  let browser: Browser | null = null;
+  let browser: any = null;
 
   try {
     const { data: project, error: projectError } = await supabaseAdmin
@@ -250,10 +272,7 @@ export async function GET(req: NextRequest) {
 
     const html = renderKindleCoverHtml({ settings });
 
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    browser = await launchBrowser();
 
     const page = await browser.newPage();
 
@@ -276,23 +295,59 @@ export async function GET(req: NextRequest) {
     });
 
     const imageBuffer = await page.screenshot({
-      type: "jpeg",
-      quality: 92,
-      fullPage: false,
-    });
+  type: "jpeg",
+  quality: 92,
+  fullPage: false,
+});
 
-    await browser.close();
+await browser.close();
 
-    const filename = `${safeFilename(project.title)}-kindle-cover.jpg`;
+const filename = `${safeFilename(project.title)}-kindle-cover.jpg`;
+const storagePath = `${project.id}/kindle-cover.jpg`;
 
-    return new Response(Buffer.from(imageBuffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "image/jpeg",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
-    });
+const { error: uploadError } = await supabaseAdmin.storage
+  .from("cover-artwork")
+  .upload(storagePath, Buffer.from(imageBuffer), {
+    upsert: true,
+    contentType: "image/jpeg",
+  });
+
+if (uploadError) {
+  throw uploadError;
+}
+
+const { data: publicUrlData } = supabaseAdmin.storage
+  .from("cover-artwork")
+  .getPublicUrl(storagePath);
+
+const kindleCoverUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+const { error: updateError } = await supabaseAdmin
+  .from("book_projects")
+  .update({
+    kindle_cover_url: kindleCoverUrl,
+  })
+  .eq("id", project.id);
+
+if (updateError) {
+  throw updateError;
+}
+
+if (saveOnly) {
+  return Response.json({
+    success: true,
+    kindle_cover_url: kindleCoverUrl,
+  });
+}
+
+return new Response(Buffer.from(imageBuffer), {
+  status: 200,
+  headers: {
+    "Content-Type": "image/jpeg",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+  },
+});
   } catch (error) {
     if (browser) await browser.close();
 

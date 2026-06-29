@@ -1,13 +1,59 @@
 import { NextRequest } from "next/server";
-import puppeteer, { type Browser } from "puppeteer";
+import chromium from "@sparticuz/chromium";
 import { PDFDocument } from "pdf-lib";
 import { readFile } from "fs/promises";
 import { buildManuscript } from "@/lib/buildManuscript";
 import path from "path";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
+async function launchBrowser() {
+  if (process.env.VERCEL) {
+    const puppeteerCore = await import("puppeteer-core");
+    const chrome = chromium as any;
+
+    return puppeteerCore.default.launch({
+      args: chrome.args,
+      defaultViewport: chrome.defaultViewport,
+      executablePath: await chrome.executablePath(),
+      headless: chrome.headless,
+    });
+  }
+
+  const puppeteer = await import("puppeteer");
+
+  return puppeteer.default.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+type PrintTrimSizeKey = "5x8" | "5.5x8.5" | "6x9";
+
+type PrintTrimLayout = {
+  key: PrintTrimSizeKey;
+  widthIn: number;
+  heightIn: number;
+};
+
+const PRINT_TRIM_LAYOUTS: Record<PrintTrimSizeKey, PrintTrimLayout> = {
+  "5x8": { key: "5x8", widthIn: 5, heightIn: 8 },
+  "5.5x8.5": { key: "5.5x8.5", widthIn: 5.5, heightIn: 8.5 },
+  "6x9": { key: "6x9", widthIn: 6, heightIn: 9 },
+};
+
+function normalizePrintTrimSize(value: unknown): PrintTrimSizeKey {
+  if (value === "5x8" || value === "5 x 8") return "5x8";
+  if (value === "5.5x8.5" || value === "5.5 x 8.5") return "5.5x8.5";
+  return "6x9";
+}
+
+function getPrintTrimLayout(value: unknown): PrintTrimLayout {
+  const key = normalizePrintTrimSize(value);
+  return PRINT_TRIM_LAYOUTS[key];
+}
 
 function escapeHtml(value: string | null | undefined) {
   return String(value ?? "")
@@ -129,19 +175,21 @@ function renderSection(section: any, manuscript: any, index: number) {
       `;
 
     case "chapter": {
-  const firstChapterIndex = manuscript.sections.findIndex(
-    (item: any) => item.type === "chapter"
-  );
+      const firstChapterIndex = manuscript.sections.findIndex(
+        (item: any) => item.type === "chapter"
+      );
 
-  const isFirstChapter = index === firstChapterIndex;
+      const isFirstChapter = index === firstChapterIndex;
 
-  return `
-    <section id="${id}" class="chapter-page ${isFirstChapter ? "first-chapter-page" : ""}">
-      <h1>${title}</h1>
-      ${renderParagraphs(section.content)}
-    </section>
-  `;
-}
+      return `
+        <section id="${id}" class="chapter-page ${
+        isFirstChapter ? "first-chapter-page" : ""
+      }">
+          <h1>${title}</h1>
+          ${renderParagraphs(section.content)}
+        </section>
+      `;
+    }
 
     default:
       return `
@@ -153,7 +201,17 @@ function renderSection(section: any, manuscript: any, index: number) {
   }
 }
 
-function manuscriptToHtml(manuscript: any) {
+function manuscriptToHtml(
+  manuscript: any,
+  trimLayout: PrintTrimLayout,
+  fontFamily: string = "classic_serif"
+) {
+  const bodyFont =
+  fontFamily === "modern_serif"
+    ? '"Libre Baskerville", Georgia, serif'
+    : fontFamily === "clean_sans"
+    ? 'Arial, Helvetica, sans-serif'
+    : '"Libre Baskerville", Georgia, serif';
   const sectionsHtml = manuscript.sections
     .map((section: any, index: number) => renderSection(section, manuscript, index))
     .join("");
@@ -166,13 +224,33 @@ function manuscriptToHtml(manuscript: any) {
   <title>${escapeHtml(manuscript.metadata.title)}</title>
 
   <style>
+  @font-face {
+  font-family: "Libre Baskerville";
+  src: url("https://www.9dayauthor.com/fonts/LibreBaskerville-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Libre Baskerville";
+  src: url("https://www.9dayauthor.com/fonts/LibreBaskerville-Bold.woff2") format("woff2");
+  font-weight: 700 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Libre Baskerville";
+  src: url("https://www.9dayauthor.com/fonts/LibreBaskerville-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+}
     @page {
-      size: 6in 9in;
+      size: ${trimLayout.widthIn}in ${trimLayout.heightIn}in;
       margin: 0.75in 0.65in 0.75in 0.75in;
 
       @bottom-center {
         content: counter(page);
-        font-family: Georgia, serif;
+        font-family: ${bodyFont};
         font-size: 10pt;
       }
     }
@@ -185,7 +263,7 @@ function manuscriptToHtml(manuscript: any) {
     body {
       margin: 0;
       padding: 0;
-      font-family: Georgia, serif;
+      font-family: ${bodyFont};
       font-size: 11pt;
       line-height: 1.15;
       color: #111;
@@ -213,19 +291,20 @@ function manuscriptToHtml(manuscript: any) {
     .toc-page {
       break-before: page;
     }
+
     .first-chapter-page {
-    break-before: right;
+      break-before: right;
     }  
 
     .title-page {
-  height: 7.5in;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  text-align: center;
-  break-after: page;
-  padding-top: 1.35in;
-}
+      height: ${trimLayout.heightIn - 1.5}in;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      text-align: center;
+      break-after: page;
+      padding-top: 1.35in;
+    }
 
     .title-page h1 {
       font-size: 26pt;
@@ -258,34 +337,34 @@ function manuscriptToHtml(manuscript: any) {
     }
 
     .toc-row {
-  display: flex;
-  align-items: baseline;
-  width: 100%;
-  margin-bottom: 0.14in;
-  font-size: 11pt;
-  color: #111;
-}
+      display: flex;
+      align-items: baseline;
+      width: 100%;
+      margin-bottom: 0.14in;
+      font-size: 11pt;
+      color: #111;
+    }
 
-.toc-row::before {
-  content: "";
-  flex: 1;
-  order: 2;
-  border-bottom: 1px dotted #555;
-  margin: 0 0.08in;
-  transform: translateY(-0.05in);
-}
+    .toc-row::before {
+      content: "";
+      flex: 1;
+      order: 2;
+      border-bottom: 1px dotted #555;
+      margin: 0 0.08in;
+      transform: translateY(-0.05in);
+    }
 
-.toc-row::after {
-  content: target-counter(attr(data-target), page);
-  order: 3;
-  min-width: 0.3in;
-  text-align: right;
-}
+    .toc-row::after {
+      content: target-counter(attr(data-target), page);
+      order: 3;
+      min-width: 0.3in;
+      text-align: right;
+    }
 
-.toc-title {
-  order: 1;
-  white-space: nowrap;
-}
+    .toc-title {
+      order: 1;
+      white-space: nowrap;
+    }
   </style>
 </head>
 
@@ -308,12 +387,12 @@ async function loadPagedJsScript() {
   return await readFile(pagedJsPath, "utf8");
 }
 
-async function renderPdfWithPagedJs(page: any, html: string) {
+async function renderPdfWithPagedJs(page: any, html: string, trimLayout: PrintTrimLayout) {
   const pagedJsScript = await loadPagedJsScript();
 
   await page.setViewport({
-    width: 576,
-    height: 864,
+    width: Math.round(trimLayout.widthIn * 96),
+    height: Math.round(trimLayout.heightIn * 96),
     deviceScaleFactor: 1,
   });
 
@@ -352,8 +431,8 @@ async function renderPdfWithPagedJs(page: any, html: string) {
   });
 
   return await page.pdf({
-    width: "6in",
-    height: "9in",
+    width: `${trimLayout.widthIn}in`,
+    height: `${trimLayout.heightIn}in`,
     printBackground: true,
     preferCSSPageSize: true,
     displayHeaderFooter: false,
@@ -382,38 +461,49 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  let browser: Browser | null = null;
+  let browser: any = null;
 
   try {
-    const manuscript = await buildManuscript(projectId);
-    const html = manuscriptToHtml(manuscript);
+    const { data: projectSettings, error: projectSettingsError } =
+      await supabaseAdmin
+        .from("book_projects")
+        .select("compiled_trim_size, compiled_font_family")
+        .eq("id", projectId)
+        .maybeSingle();
 
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    if (projectSettingsError) {
+      console.error("Failed to load trim size setting:", projectSettingsError);
+    }
+
+    const trimLayout = getPrintTrimLayout(projectSettings?.compiled_trim_size);
+
+    const manuscript = await buildManuscript(projectId);
+    const html = manuscriptToHtml(
+  manuscript,
+  trimLayout,
+  projectSettings?.compiled_font_family
+);
+
+    browser = await launchBrowser();
 
     const page = await browser.newPage();
 
-    const pdfBuffer = await renderPdfWithPagedJs(page, html);
+    const pdfBuffer = await renderPdfWithPagedJs(page, html, trimLayout);
     const officialPageCount = await getPdfPageCount(pdfBuffer);
 
     const { error: updateError } = await supabaseAdmin
-  .from("book_projects")
-  .update({
-    compiled_page_count: officialPageCount,
-    compiled_at: new Date().toISOString(),
-    compiled_trim_size: "6x9",
-    compiled_format: "paperback",
-  })
-  .eq("id", projectId);
+      .from("book_projects")
+      .update({
+        compiled_page_count: officialPageCount,
+        compiled_at: new Date().toISOString(),
+        compiled_trim_size: trimLayout.key,
+        compiled_format: "paperback",
+      })
+      .eq("id", projectId);
 
-if (updateError) {
-  console.error(
-    "Failed to save compiled book metadata:",
-    updateError
-  );
-}
+    if (updateError) {
+      console.error("Failed to save compiled book metadata:", updateError);
+    }
 
     console.log("Official PDF page count with Paged.js:", officialPageCount);
 

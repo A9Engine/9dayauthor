@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -27,14 +28,44 @@ export default function Home() {
   ];
 
   const steps = [
-    "Book idea",
-    "Outline",
-    "Chapters",
-    "Formatting",
-    "Cover",
-    "Export",
-    "Publish",
-  ];
+  {
+    title: "New Book Setup",
+    description: "Define your book title, audience, tone, and publishing goals."
+  },
+  {
+    title: "AI Book Blueprint",
+    description: "Generate multiple book directions and choose the strongest concept."
+  },
+  {
+    title: "Chapters",
+    description: "Build your manuscript chapter by chapter with AI assistance."
+  },
+  {
+    title: "Edit & Manuscript Review",
+    description: "Review content, strengthen weak sections, and refine your writing."
+  },
+  {
+    title: "Additional Pages",
+    description: "Create your dedication, acknowledgments, about the author page, and more."
+  },
+  {
+    title: "Formatting",
+    description: "Transform your manuscript into a professionally formatted book."
+  },
+  {
+    title: "Cover Creator",
+    description: "Design your paperback, hardcover, and ebook covers."
+  },
+  {
+    title: "Export & Download",
+    description: "Generate print-ready and Kindle-ready files for publishing."
+  },
+  {
+    title: "Publish to Amazon",
+    description: "Follow the guided KDP publishing process and launch your book."
+  },
+];
+
 
   return (
     <main className="min-h-screen w-full overflow-x-hidden bg-[#050505] text-white">
@@ -180,7 +211,7 @@ export default function Home() {
               </a>
 
               <div className="text-sm text-white/60">
-                No monthly subscription. One-time founder access.
+                One membership. Unlimited books. Cancel anytime.
               </div>
             </div>
           </div>
@@ -340,7 +371,7 @@ export default function Home() {
               ["🚀", "Go from idea to author in 9 days"],
               ["⏱️", "Save hours of formatting frustration"],
               ["📘", "Paperback, hardcover, and Kindle-ready"],
-              ["🏆", "Create unlimited books for one price"],
+              ["🏆", "Create unlimited books with one annual membership"],
             ].map(([icon, text]) => (
               <div key={text} className="flex min-w-0 items-center gap-4 p-3">
                 <div className="shrink-0 text-3xl">{icon}</div>
@@ -392,37 +423,45 @@ export default function Home() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how" className="w-full overflow-hidden bg-white px-5 py-20 text-black sm:px-8">
-        <div className="mx-auto w-full max-w-7xl">
-          <div className="text-center">
-            <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-              The 9 Day Author Path
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-black/60">
-              One guided step each day. No guessing. No scattered tools. No
-              publishing overwhelm.
-            </p>
-          </div>
+<section
+  id="how"
+  className="w-full overflow-hidden bg-white px-5 py-20 text-black sm:px-8"
+>
+  <div className="mx-auto w-full max-w-7xl">
+   <div className="text-center">
+  <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
+    9 Guided Steps
+  </h2>
 
-          <div className="mt-12 grid gap-4 md:grid-cols-3">
-            {steps.map((step, index) => (
-              <div
-                key={step}
-                className="min-w-0 rounded-3xl border border-black/10 bg-[#faf8f1] p-6"
-              >
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-lg font-black text-[#d4af37]">
-                  {index + 1}
-                </div>
-                <h3 className="text-xl font-black">{step}</h3>
-                <p className="mt-3 leading-7 text-black/60">
-                  Complete the next focused step and watch your book move closer
-                  to Amazon-ready.
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+  <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-black/60">
+    Plan, write, format, export, and publish your book with one clear workflow.
+  </p>
+</div>
+
+    <div className="mt-12 grid gap-4 md:grid-cols-3">
+      {steps.map((step, index) => (
+       <div
+  key={step.title}
+  className="min-w-0 rounded-3xl border border-black/10 bg-[#faf8f1] p-5 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
+>
+  <div className="space-y-2">
+    <div className="shrink-0 text-sm font-black tracking-[0.16em] text-[#b38b16]">
+  STEP {index + 1}
+</div>
+
+    <h3 className="text-lg font-black sm:text-xl">
+      {step.title}
+    </h3>
+  </div>
+
+  <p className="mt-4 leading-7 text-black/60">
+    {step.description}
+  </p>
+</div>
+      ))}
+    </div>
+  </div>
+</section>
 
       {/* FEATURES */}
       <section className="w-full overflow-hidden bg-[#050505] px-5 py-20 text-white sm:px-8">
@@ -439,7 +478,7 @@ export default function Home() {
               ["Cover Creator", "Generate artwork or upload your own images with real font overlays."],
               ["Formatting Engine", "Create clean manuscript layouts for print and ebook publishing."],
               ["KDP Guidance", "Follow clear steps for Amazon publishing, ISBN choices, and exports."],
-              ["Unlimited Books", "Pay once and create as many books as you want."],
+              ["Unlimited Books", "Create as many books as you want during your annual membership."],
             ].map(([title, text]) => (
               <div
                 key={title}
@@ -454,55 +493,124 @@ export default function Home() {
       </section>
 
       {/* PRICING */}
-      <section id="pricing" className="w-full overflow-hidden bg-[#f7f4ed] px-5 py-20 text-black sm:px-8">
-        <div className="mx-auto w-full max-w-4xl text-center">
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            Become a Published Author This Year
-          </h2>
+<section
+  id="pricing"
+  className="w-full overflow-hidden bg-[#f7f4ed] px-5 py-20 text-black sm:px-8"
+>
+  <div className="mx-auto w-full max-w-4xl text-center">
+    <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
+      Start Your Book Today
+    </h2>
 
-          <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-black/60">
-            Everything you need to go from idea to published book inside one guided system.
-            Unlimited books. One simple annual membership.
-          </p>
 
-          <div className="mx-auto mt-10 max-w-xl overflow-hidden rounded-[2rem] border border-black/10 bg-white p-8 shadow-2xl shadow-black/10">
-            <div className="text-sm font-black uppercase tracking-[0.2em] text-[#b38b16]">
-              Founding Member Price
-            </div>
-            <div className="mt-4 flex items-end justify-center gap-2">
-            <span className="text-6xl font-black">$49</span>
-            <span className="mb-2 text-xl font-medium text-black/50">
-              /year
-            </span>
-          </div>
-            <div className="mt-2 text-black/55">Unlimited books. Full access for one year.</div>
+    <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-black/60">
+  Everything you need to go from idea to published book inside one guided
+  system. Unlimited books. One simple annual membership.
+</p>
 
-            <div className="mt-8 space-y-3 text-left">
-              {[
-                "Unlimited books",
-                "Paperback, hardcover, and Kindle-ready workflow",
-                "Voice-to-book writing system",
-                "Guided 9-day author path",
-                "Cover creation system",
-                "Formatting and export guidance",
-                "Amazon KDP publishing checklist",
-              ].map((item) => (
-                <div key={item} className="flex min-w-0 gap-3">
-                  <span className="shrink-0 font-black text-[#d4af37]">✓</span>
-                  <span className="min-w-0 font-semibold">{item}</span>
-                </div>
-              ))}
-            </div>
+<div className="mx-auto mt-10 max-w-xl overflow-hidden rounded-[2rem] border border-black/10 bg-white p-8 shadow-2xl shadow-black/10">
+  <div className="text-sm font-black uppercase tracking-[0.2em] text-[#b38b16]">
+    Founding Author Pricing
+  </div>
 
-            <a
-              href="/signup"
-              className="mt-8 block w-full rounded-2xl bg-black px-7 py-4 text-center text-lg font-black text-[#d4af37] transition hover:scale-[1.02]"
-            >
-              Join 9 Day Author
-            </a>
-          </div>
-        </div>
-      </section>
+  <div className="mt-3 text-sm font-bold text-red-600">
+    Limited to the first 50 Founding Authors
+  </div>
+
+  <div className="mt-6">
+    <div className="text-6xl font-black">
+      $49
+      <span className="ml-1 text-2xl font-medium text-black/50">
+        /year
+      </span>
+    </div>
+
+    <div className="mt-3 flex flex-col items-center">
+  <div className="text-lg">
+    <span className="text-black/45">
+      Regular Price:
+    </span>
+
+    <span
+  className="ml-2 text-black/40"
+  style={{ textDecoration: "line-through" }}
+>
+  $99/year
+</span>
+  </div>
+
+  <div
+  className="mt-2 font-bold"
+  style={{ color: "#16a34a" }}
+>
+  Save 50%
+</div>
+</div>
+  </div>
+
+  <div className="mt-5 rounded-2xl border border-[#d4af37]/25 bg-[#fff8df] px-5 py-4 text-sm font-bold leading-6 text-black/70">
+    Founding members are locked in at $49/year. After the first 50 members,
+    pricing increases to $99/year.
+  </div>
+
+  <div className="mt-8 space-y-3 text-left">
+    {[
+      "Unlimited books",
+      "Paperback, hardcover, and Kindle-ready workflow",
+      "Voice-to-book writing system",
+      "Guided 9-day author path",
+      "Cover creation system",
+      "Formatting and export guidance",
+      "Amazon KDP publishing checklist",
+    ].map((item) => (
+      <div key={item} className="flex min-w-0 gap-3">
+        <span className="shrink-0 font-black text-[#d4af37]">✓</span>
+        <span className="min-w-0 font-semibold">{item}</span>
+      </div>
+    ))}
+  </div>
+
+  <a
+    href="/signup"
+    className="mt-8 block w-full rounded-2xl bg-black px-7 py-4 text-center text-lg font-black text-[#d4af37] transition hover:scale-[1.02]"
+  >
+    Claim Founding Author Access
+  </a>
+
+  <p className="mt-4 text-sm leading-6 text-black/45">
+    One annual membership. Cancel anytime.
+  </p>
+</div>
+  </div>
+</section>
+{/* FOOTER */}
+<footer className="border-t border-white/10 bg-[#050505] px-5 py-10 text-center text-sm text-white/50 sm:px-8">
+  <div className="mx-auto max-w-7xl">
+    <div className="flex flex-wrap items-center justify-center gap-6">
+      <Link href="/terms" className="transition hover:text-white">
+        Terms of Service
+      </Link>
+
+      <Link href="/privacy" className="transition hover:text-white">
+        Privacy Policy
+      </Link>
+    </div>
+
+    <p className="mt-4 max-w-2xl mx-auto text-white/40">
+      Questions? Contact us at{" "}
+      <a
+        href="mailto:support@9dayauthor.com"
+        className="font-semibold text-[#d4af37] hover:underline"
+      >
+        support@9dayauthor.com
+      </a>
+    </p>
+
+    <p className="mt-4">
+      © 2026 9 Day Author. All rights reserved.
+    </p>
+  </div>
+</footer>
     </main>
   );
 }

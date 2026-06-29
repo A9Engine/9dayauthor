@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { supabase } from "../../lib/supabase";
 import VoiceDictationButton from "./VoiceDictationButton";
 
@@ -23,14 +22,6 @@ type AiAction =
   | "generate_outline"
   | "continue_writing";
 
-type StructureDraft = {
-  id: string;
-  chapter_number: number;
-  title: string;
-  description: string;
-  reader_outcome: string;
-};
-
 export default function ChapterWorkspace({
   projectTitle,
   targetLength,
@@ -44,16 +35,6 @@ export default function ChapterWorkspace({
 }) {
   const [localChapters, setLocalChapters] = useState<Chapter[]>(chapters);
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
-  const [structureEditorOpen, setStructureEditorOpen] = useState(false);
-  const [structureDrafts, setStructureDrafts] = useState<StructureDraft[]>([]);
-  const [isSavingStructure, setIsSavingStructure] = useState(false);
-
-  const [mounted, setMounted] = useState(false);
-
-useEffect(() => {
-  setMounted(true);
-}, []);
-
   useEffect(() => {
     setLocalChapters(chapters);
   }, [chapters]);
@@ -363,7 +344,7 @@ function updateChapterUrl(chapterId: string) {
     if (!activeChapter?.id) return;
 
     try {
-  setIsSavingStructure(true);
+  setIsSaving(true);
   await saveCurrentChapterSilently();
 
       const { error } = await supabase
@@ -411,219 +392,6 @@ function updateChapterUrl(chapterId: string) {
 
     return () => clearTimeout(timer);
   }, [chapterContent, lastSavedContent, activeChapter?.id]);
-
-  function openStructureEditor() {
-  setStructureDrafts(
-    localChapters
-      .slice()
-      .sort((a, b) => a.chapter_number - b.chapter_number)
-      .map((chapter) => ({
-        id: chapter.id,
-        chapter_number: chapter.chapter_number,
-        title: chapter.title || "",
-        description: chapter.description || "",
-        reader_outcome: chapter.reader_outcome || "",
-      }))
-  );
-
-  setStructureEditorOpen(true);
-
-  setTimeout(() => {
-    document
-      .getElementById("book-structure-editor")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 100);
-}
-
-  function updateStructureDraft(
-    chapterId: string,
-    field: "title" | "description" | "reader_outcome",
-    value: string
-  ) {
-    setStructureDrafts((current) =>
-      current.map((chapter) =>
-        chapter.id === chapterId ? { ...chapter, [field]: value } : chapter
-      )
-    );
-  }
-
-  function moveStructureDraft(chapterId: string, direction: "up" | "down") {
-    setStructureDrafts((current) => {
-      const index = current.findIndex((chapter) => chapter.id === chapterId);
-      if (index === -1) return current;
-
-      const targetIndex = direction === "up" ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= current.length) return current;
-
-      const next = [...current];
-      const [removed] = next.splice(index, 1);
-      next.splice(targetIndex, 0, removed);
-
-      return next.map((chapter, nextIndex) => ({
-        ...chapter,
-        chapter_number: nextIndex + 1,
-      }));
-    });
-  }
-
-  async function deleteStructureDraft(chapterId: string) {
-    const chapter = localChapters.find((item) => item.id === chapterId);
-    if (!chapter) return;
-
-    const confirmed = window.confirm(
-      `Delete Chapter ${chapter.chapter_number}: ${chapter.title}?\n\nThis will permanently delete this chapter and its manuscript text.`
-    );
-
-    if (!confirmed) return;
-
-    const { error } = await supabase.from("book_chapters").delete().eq("id", chapterId);
-
-    if (error) {
-      console.error(error);
-      setSaveMessage("Could not delete chapter.");
-      return;
-    }
-
-    const remainingChapters = localChapters
-      .filter((item) => item.id !== chapterId)
-      .sort((a, b) => a.chapter_number - b.chapter_number)
-      .map((item, index) => ({ ...item, chapter_number: index + 1 }));
-
-    await Promise.all(
-      remainingChapters.map((item) =>
-        supabase.from("book_chapters").update({ chapter_number: item.chapter_number }).eq("id", item.id)
-      )
-    );
-
-    setLocalChapters(remainingChapters);
-    setStructureDrafts(
-      remainingChapters.map((item) => ({
-        id: item.id,
-        chapter_number: item.chapter_number,
-        title: item.title,
-        description: item.description,
-        reader_outcome: item.reader_outcome,
-      }))
-    );
-
-    if (activeChapterId === chapterId) {
-      const nextActiveChapter = remainingChapters[0];
-      setActiveChapterId(nextActiveChapter?.id);
-      setChapterContent(nextActiveChapter?.content || "");
-      setLastSavedContent(nextActiveChapter?.content || "");
-    }
-
-    setSaveMessage("Chapter deleted.");
-  }
-
-  async function addChapter() {
-    const projectId = activeChapter?.project_id || localChapters[0]?.project_id;
-    let userId = activeChapter?.user_id || localChapters[0]?.user_id;
-
-    if (!userId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      userId = user?.id;
-    }
-
-    if (!projectId || !userId) {
-      setSaveMessage("Could not add chapter because the project ID was not available.");
-      return;
-    }
-
-    const nextNumber = localChapters.length + 1;
-
-    const { data, error } = await supabase
-      .from("book_chapters")
-      .insert({
-        user_id: userId,
-        project_id: projectId,
-        chapter_number: nextNumber,
-        title: `Chapter ${nextNumber}`,
-        description: "Describe what this chapter should help the reader understand.",
-        reader_outcome: "",
-        content: "",
-        status: "draft",
-      })
-      .select("*")
-      .single();
-
-    if (error || !data) {
-      console.error(error);
-      setSaveMessage("Could not add chapter.");
-      return;
-    }
-
-    const nextChapters = [...localChapters, data].sort((a, b) => a.chapter_number - b.chapter_number);
-
-    setLocalChapters(nextChapters);
-    setStructureDrafts(
-      nextChapters.map((chapter) => ({
-        id: chapter.id,
-        chapter_number: chapter.chapter_number,
-        title: chapter.title,
-        description: chapter.description,
-        reader_outcome: chapter.reader_outcome,
-      }))
-    );
-    setActiveChapterId(data.id);
-    setChapterContent("");
-    setLastSavedContent("");
-    setSaveMessage("Chapter added.");
-  }
-
-  async function saveStructureChanges() {
-    try {
-      setIsSavingStructure(true);
-
-      const cleanedDrafts = structureDrafts.map((chapter, index) => ({
-        ...chapter,
-        chapter_number: index + 1,
-        title: chapter.title.trim() || `Chapter ${index + 1}`,
-        description: chapter.description.trim(),
-        reader_outcome: chapter.reader_outcome.trim(),
-      }));
-
-      const updates = await Promise.all(
-        cleanedDrafts.map((chapter) =>
-          supabase
-            .from("book_chapters")
-            .update({
-              chapter_number: chapter.chapter_number,
-              title: chapter.title,
-              description: chapter.description,
-              reader_outcome: chapter.reader_outcome,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", chapter.id)
-        )
-      );
-
-      const failedUpdate = updates.find((result) => result.error);
-      if (failedUpdate?.error) {
-        console.error(failedUpdate.error);
-        setSaveMessage("Could not save book structure.");
-        return;
-      }
-
-      const nextChapters = localChapters
-        .map((chapter) => {
-          const draft = cleanedDrafts.find((item) => item.id === chapter.id);
-          return draft ? { ...chapter, ...draft } : chapter;
-        })
-        .sort((a, b) => a.chapter_number - b.chapter_number);
-
-      setLocalChapters(nextChapters);
-      setStructureDrafts(cleanedDrafts);
-      setStructureEditorOpen(false);
-      setSaveMessage("Book structure saved.");
-      setTimeout(() => setSaveMessage(""), 2200);
-    } catch (error) {
-      console.error(error);
-      setSaveMessage("Something went wrong saving the book structure.");
-    } finally {
-      setIsSavingStructure(false);
-    }
-  }
 
   async function runAiAction(action: AiAction) {
     if (!activeChapter?.id) return;
@@ -784,127 +552,63 @@ ${content.slice(-2500)}
     <>
       <div
   onClick={() => setChapterPickerOpen(false)}
-  className="mx-auto grid w-full max-w-7xl gap-6 overflow-x-hidden px-4 py-6 sm:px-8 lg:grid-cols-[340px_1fr]"
+  className="mx-auto grid w-full max-w-5xl gap-6 overflow-x-hidden px-4 py-8 sm:px-8 lg:grid-cols-1"
 >
         <aside className="rounded-[2rem] border border-black/10 bg-white p-5 shadow-xl shadow-black/5">
-          <div className="mb-5">
-            <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#b38b16]">
-              Your Chapters
-            </div>
+  <div className="mb-5">
+    <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#b38b16]">
+      Step 3 of 9
+    </div>
 
-            <h2 className="mt-2 text-2xl font-black leading-tight">{projectTitle}</h2>
+    <h2 className="mt-2 text-3xl font-black sm:text-4xl">
+      Chapters
+    </h2>
+  </div>
 
-            <button
-              type="button"
-              onClick={openStructureEditor}
-              className="mt-4 w-full rounded-2xl border border-black/10 bg-[#faf8f3] px-4 py-3 text-sm font-black transition hover:-translate-y-0.5 hover:bg-white"
-            >
-              Edit Book Structure
-            </button>
-          </div>
+  <div onClick={(event) => event.stopPropagation()}>
+    <label className="text-xs font-black uppercase tracking-[0.14em] text-black/40">
+      Select Chapter
+    </label>
 
-          <div className="lg:hidden" onClick={(event) => event.stopPropagation()}>
-            <label className="text-xs font-black uppercase tracking-[0.14em] text-black/40">
-              Select Chapter
-            </label>
+    <div className="relative mt-2">
+  <button
+    type="button"
+    onClick={() => setChapterPickerOpen((current) => !current)}
+    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#d4af37]/45 bg-[#faf8f3] px-5 py-5 text-left text-base font-black leading-6 outline-none transition focus:border-[#d4af37]"
+  >
+    <span>
+      Chapter {activeChapter.chapter_number}: {activeChapter.title}
+    </span>
+    <span className="text-xl">⌄</span>
+  </button>
 
-            <div className="relative mt-2">
-              <button
-                type="button"
-                onClick={() => setChapterPickerOpen((current) => !current)}
-                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#d4af37]/45 bg-[#faf8f3] px-5 py-5 text-left text-base font-black leading-6 outline-none transition focus:border-[#d4af37]"
-              >
-                <span>
-                  Chapter {activeChapter.chapter_number}: {activeChapter.title}
-                </span>
-                <span className="text-xl">⌄</span>
-              </button>
-
-              {chapterPickerOpen ? (
-                <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-[70vh] overflow-y-auto rounded-2xl border border-black/10 bg-white p-2 shadow-2xl shadow-black/20">
-                  {localChapters
-                    .slice()
-                    .sort((a, b) => a.chapter_number - b.chapter_number)
-                    .map((chapter) => {
-                      const isActive = chapter.id === activeChapter.id;
-
-                      return (
-                        <button
-                          key={chapter.id}
-                          type="button"
-                          onClick={() => switchChapter(chapter.id)}
-                          className={`mb-2 w-full rounded-xl px-4 py-4 text-left text-base font-black leading-6 transition last:mb-0 ${
-                            isActive
-                              ? "bg-[#d4af37] text-black"
-                              : "bg-[#faf8f3] text-black hover:bg-[#fff6d8]"
-                          }`}
-                        >
-                          Chapter {chapter.chapter_number}: {chapter.title}
-                        </button>
-                      );
-                    })}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-[#d4af37]/25 bg-[#fff8df] p-4">
-              <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a5a16]">
-                Chapter {activeChapter.chapter_number}
-              </div>
-
-              <div className="mt-2 font-black leading-6">{activeChapter.title}</div>
-
-              <div className="mt-3 text-sm leading-6 text-black/60">
-                {activeChapter.description}
-              </div>
-            </div>
-          </div>
-
-          <div className="hidden space-y-3 lg:block">
-            {localChapters
-              .slice()
-              .sort((a, b) => a.chapter_number - b.chapter_number)
-              .map((chapter) => {
-                const isActive = chapter.id === activeChapter.id;
-                const contentForStatus = isActive ? chapterContent : chapter.content || "";
-                const chapterPages = (contentForStatus.trim() ? contentForStatus.trim().split(/\s+/).length : 0) / 275;
-                const isComplete = chapterPages >= targetChapterPages;
-
-                return (
-                  <button
-                    key={chapter.id}
-                    type="button"
-                    onClick={() => switchChapter(chapter.id)}
-                    className={`w-full cursor-pointer rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md ${
-                      isActive
-                        ? isComplete
-                          ? "border-green-300 bg-green-50"
-                          : "border-[#d4af37] bg-[#fff6d8]"
-                        : isComplete
-                        ? "border-green-200 bg-green-50"
-                        : "border-black/10 bg-[#faf8f3]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs font-bold uppercase tracking-[0.14em] text-black/45">
-                        Chapter {chapter.chapter_number}
-                      </div>
-
-                      {isComplete ? (
-                        <div className="text-xs font-black text-green-700">Complete</div>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-2 font-black leading-6">{chapter.title}</div>
-
-                    <div className="mt-3 line-clamp-3 text-sm leading-6 text-black/55">
-                      {chapter.description}
-                    </div>
-                  </button>
-                );
-              })}
-          </div>
-        </aside>
+  {chapterPickerOpen ? (
+    <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-black/10 bg-white p-2 shadow-2xl shadow-black/20">
+      {localChapters
+        .slice()
+        .sort((a, b) => a.chapter_number - b.chapter_number)
+        .map((chapter) => (
+          <button
+            key={chapter.id}
+            type="button"
+            onClick={() => {
+              setActiveChapterId(chapter.id);
+              setChapterPickerOpen(false);
+            }}
+            className={`block w-full rounded-xl px-4 py-3 text-left text-sm font-bold ${
+              chapter.id === activeChapter.id
+                ? "bg-[#f4e2a3] text-black"
+                : "hover:bg-black/5"
+            }`}
+          >
+            Chapter {chapter.chapter_number}: {chapter.title}
+          </button>
+        ))}
+    </div>
+  ) : null}
+</div>
+  </div>
+</aside>
 
         <section className="min-w-0 rounded-[2rem] border border-black/10 bg-white p-4 shadow-xl shadow-black/5 sm:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1105,68 +809,6 @@ ${content.slice(-2500)}
         </section>
       </div>
 
-      {mounted && structureEditorOpen
-  ? createPortal(
-  <div
-    className="fixed inset-0 z-[999999] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-6 sm:py-10"
-    onClick={() => setStructureEditorOpen(false)}
-  >
-          <div
-  id="book-structure-editor"
-  onClick={(event) => event.stopPropagation()}
-  className="w-full max-w-4xl rounded-[2rem] bg-white p-5 shadow-2xl sm:p-8"
->
-            <div className="flex flex-row items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#b38b16]">Book Structure</div>
-                <h2 className="mt-2 text-3xl font-black">Edit Chapters</h2>
-                <p className="mt-2 max-w-2xl leading-7 text-black/60">
-                  Rename chapters, update descriptions, reorder the structure, or add/remove chapters before export.
-                </p>
-              </div>
-
-              <button type="button" onClick={() => setStructureEditorOpen(false)} aria-label="Close book structure editor" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-xl font-black text-[#d4af37]">
-                ×
-              </button>
-            </div>
-
-            <div className="mt-6 space-y-4">
-              {structureDrafts.map((chapter, index) => (
-                <div key={chapter.id} className="rounded-[1.5rem] border border-black/10 bg-[#faf8f3] p-4">
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm font-black uppercase tracking-[0.14em] text-[#b38b16]">Chapter {index + 1}</div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => moveStructureDraft(chapter.id, "up")} disabled={index === 0} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-black disabled:opacity-35">Move Up</button>
-                      <button type="button" onClick={() => moveStructureDraft(chapter.id, "down")} disabled={index === structureDrafts.length - 1} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-black disabled:opacity-35">Move Down</button>
-                      <button type="button" onClick={() => deleteStructureDraft(chapter.id)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-600">Delete</button>
-                    </div>
-                  </div>
-
-                  <label className="text-xs font-black uppercase tracking-[0.14em] text-black/40">Chapter Title</label>
-                  <input value={chapter.title} onChange={(event) => updateStructureDraft(chapter.id, "title", event.target.value)} className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 font-bold outline-none focus:border-[#d4af37]" />
-
-                  <label className="mt-4 block text-xs font-black uppercase tracking-[0.14em] text-black/40">Description</label>
-                  <textarea value={chapter.description} onChange={(event) => updateStructureDraft(chapter.id, "description", event.target.value)} className="mt-2 min-h-[96px] w-full rounded-2xl border border-black/10 bg-white px-4 py-3 leading-7 outline-none focus:border-[#d4af37]" />
-
-                  <label className="mt-4 block text-xs font-black uppercase tracking-[0.14em] text-black/40">Reader Outcome</label>
-                  <textarea value={chapter.reader_outcome} onChange={(event) => updateStructureDraft(chapter.id, "reader_outcome", event.target.value)} className="mt-2 min-h-[76px] w-full rounded-2xl border border-black/10 bg-white px-4 py-3 leading-7 outline-none focus:border-[#d4af37]" />
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button type="button" onClick={addChapter} className="rounded-2xl border border-black/10 bg-white px-5 py-4 text-sm font-black transition hover:-translate-y-0.5">+ Add Chapter</button>
-              <button type="button" onClick={saveStructureChanges} disabled={isSavingStructure} className="rounded-2xl bg-black px-6 py-4 text-sm font-black text-[#d4af37] transition hover:-translate-y-0.5 disabled:opacity-50">
-                {isSavingStructure ? "Saving Structure..." : "Save Book Structure"}
-              </button>
-            </div>
-          </div>
-        </div>
-            ,
-      document.body
-    )
-  : null}
     </>
   );
 }

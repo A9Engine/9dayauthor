@@ -123,11 +123,7 @@ function buildTitlePageHtml(title: string, authorName?: string) {
   return `
     <div class="book-title-page">
       <h1>${escapeHtml(title)}</h1>
-      ${
-        authorName
-          ? `<div class="book-title-rule"></div><p>${escapeHtml(authorName)}</p>`
-          : ""
-      }
+      ${authorName ? `<p>${escapeHtml(authorName)}</p>` : ""}
     </div>
   `;
 }
@@ -271,7 +267,7 @@ function applySandboxStyles({
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      padding-top: 1.35in;
+      padding-top: 1.05in;
       text-align: center;
     }
 
@@ -290,12 +286,6 @@ function applySandboxStyles({
       text-align: center;
     }
 
-    .book-title-rule {
-      width: 0.75in;
-      height: 1px;
-      background: #999;
-      margin: 0.65in 0 0.45in;
-    }
 
     .book-dedication-page {
       height: 100%;
@@ -642,7 +632,8 @@ function buildTocRowsFromPages(pages: MeasuredBookPage[]) {
       page.type === "chapter_first" ||
       page.type === "acknowledgments" ||
       page.type === "about_author" ||
-      page.type === "what_comes_next";
+      page.type === "what_comes_next" ||
+      page.type === "section";
 
     if (!shouldInclude) return;
 
@@ -659,6 +650,20 @@ function buildTocRowsFromPages(pages: MeasuredBookPage[]) {
   });
 
   return rows;
+}
+
+
+function createBlankPage(pageNumber: number, id = `blank-page-${pageNumber}`): MeasuredBookPage {
+  return {
+    id,
+    pageNumber,
+    displayPageNumber: "",
+    type: "blank",
+    title: "Blank Page",
+    label: "Blank Page",
+    contentHtml: "",
+    isLeftPage: pageNumber % 2 === 0,
+  };
 }
 
 function paginateBlocks({
@@ -678,6 +683,11 @@ function paginateBlocks({
   let pageNumber = 1;
 
   blocks.forEach((block) => {
+    if (block.type === "chapter" && pageNumber % 2 === 0) {
+      pages.push(createBlankPage(pageNumber, `blank-before-${block.id}`));
+      pageNumber += 1;
+    }
+
     if (block.type === "title_page" || block.type === "table_of_contents") {
       const result = paginateFixedBlock({
         block,
@@ -706,16 +716,7 @@ function paginateBlocks({
   });
 
   if (pages.length % 2 !== 0) {
-    pages.push({
-      id: "blank-final-page",
-      pageNumber,
-      displayPageNumber: "",
-      type: "blank",
-      title: "Blank Page",
-      label: "Blank Page",
-      contentHtml: "",
-      isLeftPage: pageNumber % 2 === 0,
-    });
+    pages.push(createBlankPage(pageNumber, "blank-final-page"));
   }
 
   return pages;

@@ -24,3 +24,23 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+@font-face {
+  font-family: "CoverSerif";
+  src: url("/fonts/LibreBaskerville-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CoverSerif";
+  src: url("/fonts/LibreBaskerville-Bold.woff2") format("woff2");
+  font-weight: 700 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CoverSerif";
+  src: url("/fonts/LibreBaskerville-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+}

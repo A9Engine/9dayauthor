@@ -198,7 +198,6 @@ const CORE_TEXT_LAYER_IDS = [
 const FONT_OPTIONS = [
   "Georgia",
   "Times New Roman",
-  "Garamond",
   "Arial",
   "Helvetica",
   "Verdana",
@@ -218,6 +217,34 @@ const TARGET_OPTIONS: { label: string; value: ArtworkTarget }[] = [
 
 const KINDLE_COVER_WIDTH_PX = 320;
 const KINDLE_COVER_HEIGHT_PX = 512;
+
+function normalizeCoverTrimSize(value: unknown): CoverTrimSizeKey | null {
+  if (typeof value !== "string") return null;
+
+  const cleaned = value
+    .toLowerCase()
+    .replace(/×/g, "x")
+    .replace(/\s+/g, "")
+    .trim();
+
+  if (cleaned === "5x8") return "5x8";
+  if (cleaned === "5.5x8.5" || cleaned === "5.5x8.5in") return "5.5x8.5";
+  if (cleaned === "6x9") return "6x9";
+
+  return null;
+}
+
+function getOfficialCoverPageCount(
+  projectData: CoverCreatorWorkspaceProps["projectData"],
+  savedCoverSettings?: SavedCoverSettings | null
+) {
+  return (
+    projectData.officialPageCount ||
+    savedCoverSettings?.page_count ||
+    projectData.estimatedPageCount ||
+    150
+  );
+}
 
 function createLayerId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -340,9 +367,9 @@ function coreDefaultLayers(
       type: "text",
       label: "Front Cover Subtitle",
       text: subtitle,
-      x: 16,
+      x: 10,
       y: 36,
-      width: 68,
+      width: 80,
       height: 12,
       rotation: 0,
       opacity: 1,
@@ -425,7 +452,7 @@ function sanitizeSavedImageLayers(value: unknown): CoverImageLayer[] {
       width: clampNumber(Number(layer.width), 8, 100),
       height: clampNumber(Number(layer.height), 8, 100),
       opacity: clampNumber(Number(layer.opacity), 0.1, 1),
-      zIndex: Number(layer.zIndex) || 25,
+      zIndex: Math.min(Number(layer.zIndex) || 20, 20),
       objectFit: layer.objectFit === "contain" ? "contain" : "cover",
       imageX: Number(layer.imageX) || 0,
       imageY: Number(layer.imageY) || 0,
@@ -490,9 +517,11 @@ function buildInitialLayers(
           : defaultLayer.text,
 
       x:
-        Number(savedLayer.width) >= 8
-          ? safeNumber(savedLayer.x, defaultLayer.x, 0, 96)
-          : defaultLayer.x,
+  defaultLayer.id === "front-subtitle-layer"
+    ? Math.min(safeNumber(savedLayer.x, defaultLayer.x, 0, 96), 6)
+    : Number(savedLayer.width) >= 8
+    ? safeNumber(savedLayer.x, defaultLayer.x, 0, 96)
+    : defaultLayer.x,
 
       y:
         Number(savedLayer.height) >= 5
@@ -500,9 +529,14 @@ function buildInitialLayers(
           : defaultLayer.y,
 
       width:
-        Number(savedLayer.width) >= 8
-          ? safeNumber(savedLayer.width, defaultLayer.width, 8, 100)
-          : defaultLayer.width,
+  defaultLayer.id === "front-subtitle-layer"
+    ? Math.max(
+        safeNumber(savedLayer.width, defaultLayer.width, 8, 100),
+        88
+      )
+    : Number(savedLayer.width) >= 8
+    ? safeNumber(savedLayer.width, defaultLayer.width, 8, 100)
+    : defaultLayer.width,
 
       height:
         Number(savedLayer.height) >= 5
@@ -564,23 +598,50 @@ function buildInitialLayers(
   ];
 }
 
+function getCoverCreatorCacheKey(projectId: string) {
+  return `cover-creator-cache-${projectId}`;
+}
+
 export default function CoverCreatorWorkspace({
   projectData,
   savedCoverSettings,
 }: CoverCreatorWorkspaceProps) {
+
+  const coverCacheKey = getCoverCreatorCacheKey(projectData.id);
+
+function readCoverCache() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const cached = sessionStorage.getItem(coverCacheKey);
+    return cached ? JSON.parse(cached) : null;
+  } catch {
+    return null;
+  }
+}
+
+const cachedCover = readCoverCache();
+
   const [viewportWidth, setViewportWidth] = useState(1200);
+
+  const finalizedTrimSize = normalizeCoverTrimSize(projectData.compiledTrimSize);
+  const initialTrimSize =
+    finalizedTrimSize ||
+    normalizeCoverTrimSize(savedCoverSettings?.trim_size) ||
+    "6x9";
 
   const [coverFormat, setCoverFormat] = useState<CoverFormat>(
     savedCoverSettings?.cover_format || "paperback"
   );
-  const [trimSize, setTrimSize] = useState<CoverTrimSizeKey>(
-    savedCoverSettings?.trim_size || "6x9"
-  );
+  const [trimSize, setTrimSize] = useState<CoverTrimSizeKey>(initialTrimSize);
+  const [hardcoverTrimSizeOverride, setHardcoverTrimSizeOverride] = useState<
+    CoverTrimSizeKey | ""
+  >("");
   const [paperType, setPaperType] = useState<CoverPaperType>(
     savedCoverSettings?.paper_type || "white"
   );
   const [pageCount, setPageCount] = useState(
-    savedCoverSettings?.page_count || projectData.estimatedPageCount || 150
+    getOfficialCoverPageCount(projectData, savedCoverSettings)
   );
 
   const [isExportingCover, setIsExportingCover] = useState(false);
@@ -594,46 +655,84 @@ export default function CoverCreatorWorkspace({
 } | null>(null);
 
   const [title, setTitle] = useState(
-    savedCoverSettings?.title || projectData.title || ""
-  );
-  const [subtitle, setSubtitle] = useState(savedCoverSettings?.subtitle || "");
-  const [authorName, setAuthorName] = useState(
-    savedCoverSettings?.author_name || projectData.author_name || "Author Name"
-  );
-  const [spineTitle, setSpineTitle] = useState(
-    savedCoverSettings?.spine_title || projectData.title || ""
-  );
-  const [spineAuthor, setSpineAuthor] = useState(
-    savedCoverSettings?.spine_author ||
-      projectData.author_name ||
-      "Author Name"
-  );
-  const [backCoverText, setBackCoverText] = useState(
-    savedCoverSettings?.back_cover_text ||
-      "Write a compelling back cover description here. Focus on the reader, the promise of the book, and why this book matters now."
+  cachedCover?.title ??
+    savedCoverSettings?.title ??
+    projectData.title ??
+    ""
+);
+
+const [subtitle, setSubtitle] = useState(
+  cachedCover?.subtitle ??
+    savedCoverSettings?.subtitle ??
+    ""
+);
+
+const [authorName, setAuthorName] = useState(
+  cachedCover?.authorName ??
+    savedCoverSettings?.author_name ??
+    projectData.author_name ??
+    "Author Name"
+);
+
+const [spineTitle, setSpineTitle] = useState(
+  cachedCover?.spineTitle ??
+    savedCoverSettings?.spine_title ??
+    projectData.title ??
+    ""
+);
+
+const [spineAuthor, setSpineAuthor] = useState(
+  cachedCover?.spineAuthor ??
+    savedCoverSettings?.spine_author ??
+    projectData.author_name ??
+    "Author Name"
+);
+
+const [backCoverText, setBackCoverText] = useState(
+  cachedCover?.backCoverText ??
+    savedCoverSettings?.back_cover_text ??
+    "Write a compelling back cover description here. Focus on the reader, the promise of the book, and why this book matters now."
+);
+
+const [fullWrapBackgroundImage, setFullWrapBackgroundImage] = useState(
+  cachedCover?.fullWrapBackgroundImage ??
+    savedCoverSettings?.background_image_url ??
+    ""
+);
+
+const [fullWrapImageScale, setFullWrapImageScale] = useState(
+  cachedCover?.fullWrapImageScale ??
+    savedCoverSettings?.image_scale ??
+    100
+);
+
+const [fullWrapImageX, setFullWrapImageX] = useState(
+  cachedCover?.fullWrapImageX ??
+    savedCoverSettings?.image_x ??
+    0
+);
+
+const [fullWrapImageY, setFullWrapImageY] = useState(
+  cachedCover?.fullWrapImageY ??
+    savedCoverSettings?.image_y ??
+    0
+);
+
+const [fullWrapImageFitMode, setFullWrapImageFitMode] =
+  useState<ImageFitMode>(
+    cachedCover?.fullWrapImageFitMode ??
+      savedCoverSettings?.image_fit_mode ??
+      "cover"
   );
 
-  const [fullWrapBackgroundImage, setFullWrapBackgroundImage] = useState(
-    savedCoverSettings?.background_image_url || ""
-  );
-  const [fullWrapImageScale, setFullWrapImageScale] = useState(
-    savedCoverSettings?.image_scale || 100
-  );
-  const [fullWrapImageX, setFullWrapImageX] = useState(
-    savedCoverSettings?.image_x || 0
-  );
-  const [fullWrapImageY, setFullWrapImageY] = useState(
-    savedCoverSettings?.image_y || 0
-  );
-  const [fullWrapImageFitMode, setFullWrapImageFitMode] =
-    useState<ImageFitMode>(savedCoverSettings?.image_fit_mode || "cover");
+const [selectedPanel, setSelectedPanel] = useState<CoverPanelKey>("front");
+const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
 
-  const [selectedPanel, setSelectedPanel] = useState<CoverPanelKey>("front");
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  const [panelStyles, setPanelStyles] = useState<CoverPanelStyles>(() =>
-    defaultPanelStyles(savedCoverSettings)
-  );
-  const initialLayers = useMemo(
+const [panelStyles, setPanelStyles] = useState<CoverPanelStyles>(
+  cachedCover?.panelStyles ?? defaultPanelStyles(savedCoverSettings)
+);
+
+const initialLayers = useMemo(
   () => buildInitialLayers(projectData, savedCoverSettings),
   [projectData, savedCoverSettings]
 );
@@ -645,22 +744,37 @@ const savedLayerSets =
     : null;
 
 const [paperbackLayers, setPaperbackLayers] = useState<CoverLayer[]>(
-  () => savedLayerSets?.paperback || initialLayers
+  () => cachedCover?.paperbackLayers ?? savedLayerSets?.paperback ?? initialLayers
 );
 
 const [hardcoverLayers, setHardcoverLayers] = useState<CoverLayer[]>(
-  () => savedLayerSets?.hardcover || initialLayers
+  () => cachedCover?.hardcoverLayers ?? savedLayerSets?.hardcover ?? initialLayers
 );
 
 const [kindleLayers, setKindleLayers] = useState<CoverLayer[]>(
   () =>
-    savedLayerSets?.kindle ||
+    cachedCover?.kindleLayers ??
+    savedLayerSets?.kindle ??
     initialLayers.filter((layer) => layer.panel === "front")
 );
 
-  const [coverAssetMode, setCoverAssetMode] = useState<
+const [coverAssetMode, setCoverAssetMode] = useState<
   "paperback" | "hardcover" | "kindle"
->("paperback");
+>(cachedCover?.coverAssetMode ?? "paperback");
+
+const finalizedManuscriptTrimSize =
+  normalizeCoverTrimSize(projectData.compiledTrimSize) || initialTrimSize;
+
+const hardcoverRequiresManualTrimSize =
+  coverAssetMode === "hardcover" && finalizedManuscriptTrimSize === "5x8";
+
+const isHardcoverTrimSizeMissing =
+  hardcoverRequiresManualTrimSize && !hardcoverTrimSizeOverride;
+
+const activeTrimSize: CoverTrimSizeKey =
+  hardcoverRequiresManualTrimSize && hardcoverTrimSizeOverride
+    ? hardcoverTrimSizeOverride
+    : trimSize;
 
 const coverLayers =
   coverAssetMode === "kindle"
@@ -687,12 +801,63 @@ const setCoverLayers =
     savedCoverSettings?.show_guides ?? true
   );
 
+  useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  try {
+    sessionStorage.setItem(
+      coverCacheKey,
+      JSON.stringify({
+        title,
+        subtitle,
+        authorName,
+        spineTitle,
+        spineAuthor,
+        backCoverText,
+        fullWrapBackgroundImage,
+        fullWrapImageScale,
+        fullWrapImageX,
+        fullWrapImageY,
+        fullWrapImageFitMode,
+        panelStyles,
+        paperbackLayers,
+        hardcoverLayers,
+        kindleLayers,
+        coverAssetMode,
+        showGuides,
+      })
+    );
+  } catch (error) {
+    console.warn("Could not cache cover creator state", error);
+  }
+}, [
+  coverCacheKey,
+  title,
+  subtitle,
+  authorName,
+  spineTitle,
+  spineAuthor,
+  backCoverText,
+  fullWrapBackgroundImage,
+  fullWrapImageScale,
+  fullWrapImageX,
+  fullWrapImageY,
+  fullWrapImageFitMode,
+  panelStyles,
+  paperbackLayers,
+  hardcoverLayers,
+  kindleLayers,
+  coverAssetMode,
+  showGuides,
+]);
+
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generationDots, setGenerationDots] = useState(1);
   const [generationStatus, setGenerationStatus] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [isSavingCover, setIsSavingCover] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
 
@@ -708,6 +873,14 @@ const setCoverLayers =
 
   const [isDraggingLayerEditor, setIsDraggingLayerEditor] = useState(false);
   const layerEditorDragOffsetRef = useRef({ x: 0, y: 0 });
+  const livePreviewRef = useRef<HTMLDivElement | null>(null);
+
+function scrollToLivePreview() {
+  livePreviewRef.current?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}
   const [cropLayerId, setCropLayerId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -753,6 +926,25 @@ const setCoverLayers =
   }, []);
 
   useEffect(() => {
+    const nextTrimSize = normalizeCoverTrimSize(projectData.compiledTrimSize);
+
+    if (nextTrimSize) {
+      setTrimSize(nextTrimSize);
+      setHardcoverTrimSizeOverride("");
+    }
+
+    if (projectData.hasFinalizedManuscript) {
+      setPageCount(getOfficialCoverPageCount(projectData, savedCoverSettings));
+    }
+  }, [
+    projectData.compiledTrimSize,
+    projectData.officialPageCount,
+    projectData.estimatedPageCount,
+    projectData.hasFinalizedManuscript,
+    savedCoverSettings?.page_count,
+  ]);
+
+  useEffect(() => {
     if (!isGeneratingImage) return;
 
     const interval = setInterval(() => {
@@ -765,11 +957,11 @@ const setCoverLayers =
   const layout = useMemo(() => {
     return calculateCoverLayout({
       format: coverFormat,
-      trimSize,
+      trimSize: activeTrimSize,
       paperType,
       pageCount,
     });
-  }, [coverFormat, trimSize, paperType, pageCount]);
+  }, [coverFormat, activeTrimSize, paperType, pageCount]);
 
   const previewScale = useMemo(() => {
     const usableWidth = viewportWidth < 768 ? viewportWidth - 72 : 900;
@@ -918,7 +1110,7 @@ const setCoverLayers =
       height: panel === "spine" ? 30 : 44,
       rotation: 0,
       opacity: 1,
-      zIndex: 30,
+      zIndex: 20,
       objectFit: "contain",
       imageX: 0,
       imageY: 0,
@@ -1064,7 +1256,7 @@ const setCoverLayers =
           title,
           genre: projectData.book_type || "",
           coverFormat,
-          trimSize,
+          trimSize: activeTrimSize,
         }),
       });
 
@@ -1102,13 +1294,38 @@ const setCoverLayers =
 
   async function exportPaperbackCover() {
   try {
-    setIsExportingCover(true);
+    if (coverAssetMode === "hardcover" && isHardcoverTrimSizeMissing) {
+      setSaveMessage(
+        "Please select a supported hardcover book size before exporting."
+      );
+      return;
+    }
 
-    const response = await fetch(
-      `/api/export-cover?projectId=${projectData.id}&format=paperback`
-    );
+    if (!projectData?.id) {
+      setSaveMessage("Missing project ID. Please refresh and try again.");
+      return;
+    }
+
+    setIsExportingCover(true);
+    setSaveMessage("Exporting print cover...");
+
+    const format =
+      coverAssetMode === "hardcover" ? "hardcover" : "paperback";
+
+    const params = new URLSearchParams({
+      projectId: projectData.id,
+      format,
+      trimSize: activeTrimSize,
+    });
+
+    const response = await fetch(`/api/export-cover?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    });
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error("Cover export failed:", response.status, errorText);
       setSaveMessage("Cover export failed. Please try again.");
       return;
     }
@@ -1116,16 +1333,24 @@ const setCoverLayers =
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
 
+    const safeTitle = String(projectData.title || "book")
+      .replace(/[^a-z0-9-_]+/gi, "-")
+      .replace(/-+/g, "-")
+      .toLowerCase();
+
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${projectData.title || "book"}-paperback-cover.pdf`;
+    link.download = `${safeTitle}-${format}-cover.pdf`;
+
     document.body.appendChild(link);
     link.click();
     link.remove();
 
     window.URL.revokeObjectURL(url);
+
+    setSaveMessage("Print cover exported.");
   } catch (error) {
-    console.error(error);
+    console.error("Something went wrong exporting the cover:", error);
     setSaveMessage("Something went wrong exporting the cover.");
   } finally {
     setIsExportingCover(false);
@@ -1147,24 +1372,21 @@ async function exportKindleCover() {
     }
 
     const blob = await response.blob();
-
     const url = window.URL.createObjectURL(blob);
 
     const link = document.createElement("a");
-
     link.href = url;
     link.download = "kindle-cover.jpg";
 
     document.body.appendChild(link);
-
     link.click();
-
     link.remove();
 
     window.URL.revokeObjectURL(url);
+
+    setSaveMessage("Kindle cover exported and saved to My Books.");
   } catch (error) {
     console.error(error);
-
     alert("Failed to export Kindle cover.");
   } finally {
     setIsExportingKindleCover(false);
@@ -1173,6 +1395,7 @@ async function exportKindleCover() {
 
   async function saveCoverSettings() {
   try {
+    setIsSavingCover(true);
     setSaveMessage("Saving cover settings...");
 
     const frontTitleLayer = coverLayers.find(
@@ -1204,7 +1427,7 @@ async function exportKindleCover() {
       body: JSON.stringify({
         project_id: projectData.id,
         cover_format: coverFormat,
-        trim_size: trimSize,
+        trim_size: activeTrimSize,
         paper_type: paperType,
         page_count: pageCount,
 
@@ -1238,17 +1461,33 @@ async function exportKindleCover() {
       return;
     }
 
+    if (projectData?.id && coverAssetMode === "kindle") {
+  setSaveMessage("Cover settings saved. Updating My Books cover...");
+
+  await fetch(
+    `/api/export-kindle-cover?projectId=${projectData.id}&saveOnly=true`
+  );
+
+  setSaveMessage("Cover settings saved. My Books cover updated.");
+}
+
     setTitle(cleanTitle);
     setSubtitle(cleanSubtitle);
     setAuthorName(cleanAuthorName);
     setBackCoverText(cleanBackCoverText);
 
     setLastSavedAt(new Date().toLocaleTimeString());
-    setSaveMessage("Cover settings saved.");
+    if (coverAssetMode !== "kindle") {
+  setSaveMessage("Cover settings saved.");
+}
+
   } catch (error) {
     console.error(error);
     setSaveMessage("Something went wrong saving cover settings.");
-  }
+   } finally {
+  setIsSavingCover(false);
+}
+  
 }
 
   function removeBackgroundArtwork() {
@@ -1289,59 +1528,62 @@ async function exportKindleCover() {
 
     const isSelected = selectedLayerId === layer.id;
     const fontScale = Math.max(0.55, Math.min(1, previewScale / 70));
+    const previewZIndex = Math.min(Number(layer.zIndex || 20), 20);
 
     if (coverAssetMode === "kindle" && layer.panel !== "front") {
   return null;
 }
 
 if (layer.panel === "spine") {
-      return (
-        <div
-          key={layer.id}
-          onClick={(event) => {
-            event.stopPropagation();
-            setSelectedPanel("spine");
-            setSelectedLayerId(layer.id);
-          }}
+  return (
+    <div
+      key={layer.id}
+      onMouseDown={(event) => beginLayerDrag(event, layer, "move")}
+      onClick={(event) => {
+        event.stopPropagation();
+        setSelectedPanel("spine");
+        setSelectedLayerId(layer.id);
+      }}
+      style={{
+        position: "absolute",
+        pointerEvents: "auto",
+        left: `${spineLeftPx}px`,
+        top: "0px",
+        width: `${spineWidthPx}px`,
+        height: `${wrapHeightPx}px`,
+        zIndex: 20,
+        cursor: "grab",
+        outline: isSelected ? "2px solid #d4af37" : "none",
+      }}
+    >
+      <svg
+        width={spineWidthPx}
+        height={wrapHeightPx}
+        viewBox={`0 0 ${spineWidthPx} ${wrapHeightPx}`}
+        style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "none" }}
+      >
+        <text
+          x={spineWidthPx / 2}
+          y={wrapHeightPx / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          transform={`rotate(90 ${spineWidthPx / 2} ${wrapHeightPx / 2})`}
           style={{
-            position: "absolute",
-            left: `${spineLeftPx}px`,
-            top: "0px",
-            width: `${spineWidthPx}px`,
-            height: `${wrapHeightPx}px`,
-            zIndex: 80,
-            cursor: "pointer",
-            outline: isSelected ? "2px solid #d4af37" : "none",
+            fill: layer.color,
+            fontFamily: layer.fontFamily === "Georgia" ? "CoverSerif" : layer.fontFamily,
+            fontSize: `${Math.max(7, layer.fontSize * fontScale)}px`,
+            fontWeight: layer.fontWeight,
+            fontStyle: layer.fontStyle,
+            letterSpacing: `${layer.letterSpacing * 14}px`,
+            textTransform: "uppercase",
           }}
         >
-          <svg
-            width={spineWidthPx}
-            height={wrapHeightPx}
-            viewBox={`0 0 ${spineWidthPx} ${wrapHeightPx}`}
-            style={{ position: "absolute", inset: 0, overflow: "visible" }}
-          >
-            <text
-              x={spineWidthPx / 2}
-              y={wrapHeightPx / 2}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              transform={`rotate(90 ${spineWidthPx / 2} ${wrapHeightPx / 2})`}
-              style={{
-                fill: layer.color,
-                fontFamily: layer.fontFamily,
-                fontSize: `${Math.max(7, layer.fontSize * fontScale)}px`,
-                fontWeight: layer.fontWeight,
-                fontStyle: layer.fontStyle,
-                letterSpacing: `${layer.letterSpacing * 14}px`,
-                textTransform: "uppercase",
-              }}
-            >
-              {layer.text}
-            </text>
-          </svg>
-        </div>
-      );
-    }
+          {layer.text}
+        </text>
+      </svg>
+    </div>
+  );
+}
 
     const panelRect = getPanelRect(layer.panel);
     const panelLeftPx = panelRect.left;
@@ -1356,7 +1598,7 @@ if (layer.panel === "spine") {
           : layer.id === "front-title-layer"
           ? Math.max(layer.width, 68)
           : layer.id === "front-subtitle-layer"
-          ? Math.max(layer.width, 58)
+          ? Math.max(layer.width, 72)
           : layer.id === "front-author-layer"
           ? Math.max(layer.width, 46)
           : Math.max(layer.width, 18),
@@ -1383,14 +1625,15 @@ if (layer.panel === "spine") {
         }}
         style={{
           position: "absolute",
+          pointerEvents: "auto",
           left: `${panelLeftPx + (bounds.x / 100) * panelWidthPx}px`,
           top: `${(bounds.y / 100) * wrapHeightPx}px`,
           width: `${(bounds.width / 100) * panelWidthPx}px`,
           height: "auto",
           minHeight: "auto",
-          zIndex: 80,
+          zIndex: 20,
           color: layer.color,
-          fontFamily: layer.fontFamily,
+          fontFamily: layer.fontFamily === "Georgia" ? "CoverSerif" : layer.fontFamily,
           fontSize: `${Math.max(10, layer.fontSize * fontScale)}px`,
           fontWeight: layer.fontWeight,
           fontStyle: layer.fontStyle,
@@ -1455,8 +1698,8 @@ function renderArtworkOverlays() {
     <div
       className="absolute inset-0"
       style={{
-        zIndex: 55,
-        pointerEvents: "auto",
+        zIndex: 60,
+        pointerEvents: "none",
       }}
     >
       {imageLayers.map((layer) => {
@@ -1467,8 +1710,13 @@ function renderArtworkOverlays() {
         return (
           <div
             key={layer.id}
-            onMouseDown={(event) => beginLayerDrag(event, layer, "move")}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              beginLayerDrag(event, layer, "move");
+            }}
             onClick={(event) => {
+              event.preventDefault();
               event.stopPropagation();
               setSelectedPanel(layer.panel);
               setSelectedLayerId(layer.id);
@@ -1477,12 +1725,17 @@ function renderArtworkOverlays() {
               position: "absolute",
               left: `${panelRect.left + (layer.x / 100) * panelRect.width}px`,
               top: `${panelRect.top + (layer.y / 100) * panelRect.height}px`,
-              width: `${(layer.width / 100) * panelRect.width}px`,
+              width:
+  layer.id === "front-subtitle-layer"
+    ? `${panelRect.width * 0.88}px`
+    : `${(layer.width / 100) * panelRect.width}px`,
               height: `${(layer.height / 100) * panelRect.height}px`,
               opacity: layer.opacity,
               cursor: "grab",
               touchAction: "none",
               overflow: "hidden",
+              pointerEvents: "auto",
+              zIndex: Number(layer.zIndex || 20) + 60,
               border: isSelected ? "2px solid #d4af37" : "2px solid transparent",
               boxShadow: isSelected
                 ? "0 0 0 4px rgba(212,175,55,0.22)"
@@ -1571,7 +1824,7 @@ function renderArtworkOverlays() {
     return (
       <div
         className="absolute inset-0"
-        style={{ zIndex: 80, pointerEvents: "auto" }}
+        style={{ zIndex: 20, pointerEvents: "none" }}
       >
         {CORE_TEXT_LAYER_IDS.map((layerId) => renderCoreTextOverlay(layerId))}
       </div>
@@ -1887,7 +2140,7 @@ updateLayer(dragState.layerId, nextUpdates);
             transform={`rotate(90 ${panelWidthPx / 2} ${panelHeightPx / 2})`}
             style={{
               fill: layer.color,
-              fontFamily: layer.fontFamily,
+              fontFamily: layer.fontFamily === "Georgia" ? "CoverSerif" : layer.fontFamily,
               fontSize: `${layer.fontSize}px`,
               fontWeight: layer.fontWeight,
               fontStyle: layer.fontStyle,
@@ -1907,7 +2160,7 @@ updateLayer(dragState.layerId, nextUpdates);
           width: "100%",
           height: "100%",
           color: layer.color,
-          fontFamily: layer.fontFamily,
+          fontFamily: layer.fontFamily === "Georgia" ? "CoverSerif" : layer.fontFamily,
           fontSize: `${layer.fontSize}px`,
           fontWeight: layer.fontWeight,
           fontStyle: layer.fontStyle,
@@ -1923,7 +2176,7 @@ updateLayer(dragState.layerId, nextUpdates);
               ? "flex-end"
               : "flex-start",
           overflow: "hidden",
-          padding: isSelected ? "6px" : "0px",
+          padding: "0px",
         }}
       >
         <div className="whitespace-pre-wrap">{layer.text}</div>
@@ -2050,31 +2303,33 @@ updateLayer(dragState.layerId, nextUpdates);
         />
 
         <div className="absolute inset-0" style={{ zIndex: 10 }}>
-          {getPanelLayers(panel).map((layer) =>
-            renderCoverLayer(layer, panelWidthPx, wrapHeightPx)
-          )}
-        </div>
+  {getPanelLayers(panel)
+    .filter((layer) => layer.type !== "image")
+    .map((layer) => renderCoverLayer(layer, panelWidthPx, wrapHeightPx))}
+</div>
 
         {panel === "back" ? (
-          <div
-            className="pointer-events-none absolute z-[70] flex flex-col items-center justify-center rounded-md border-2 border-black/45 bg-white p-2 text-center shadow-sm"
-            style={{
-              right: `${safeMarginPx + 12}px`,
-              bottom: `${bleedPx + safeMarginPx + 12}px`,
-              width: viewportWidth < 768 ? "104px" : "150px",
-              height: viewportWidth < 768 ? "66px" : "96px",
-            }}
-          >
-            <div className="h-8 w-full rounded-sm bg-[repeating-linear-gradient(to_right,#111_0px,#111_2px,transparent_2px,transparent_5px,#111_5px,#111_6px,transparent_6px,transparent_10px)]" />
-            <div className="mt-1 text-[8px] font-black uppercase tracking-[0.12em] text-black/45">
-              <img
-  src="/barcode-placeholder.svg"
-  alt="ISBN barcode placeholder"
-  className="h-full w-full object-contain"
-/>
-            </div>
-          </div>
-        ) : null}
+  <div
+    className="pointer-events-none absolute z-[70] flex items-center justify-center"
+    style={{
+      right: `${safeMarginPx + 4}px`,
+      bottom: `${bleedPx + safeMarginPx + 4}px`,
+      width: viewportWidth < 768 ? "72px" : "108px",
+      height: viewportWidth < 768 ? "38px" : "58px",
+      background: "transparent",
+      border: "none",
+      borderRadius: "0px",
+      boxShadow: "none",
+      padding: "0px",
+    }}
+  >
+    <img
+      src="/barcode-placeholder.svg"
+      alt="ISBN barcode placeholder"
+      className="h-full w-full object-contain"
+    />
+  </div>
+) : null}
       </section>
     );
   }
@@ -2171,7 +2426,7 @@ updateLayer(dragState.layerId, nextUpdates);
         height: `${panelRect.height}px`,
         width: "0px",
         borderLeft: "3px solid #2563eb",
-        zIndex: 1200,
+        zIndex: 10,
         boxShadow: "0 0 12px rgba(37,99,235,0.55)",
       }}
     />
@@ -2186,11 +2441,11 @@ updateLayer(dragState.layerId, nextUpdates);
         style={{
           position: "absolute",
           inset: 0,
-          zIndex: 1000,
+          zIndex: 10,
           pointerEvents: "none",
         }}
       >
-        <div style={{ position: "absolute", inset: 0, border: "4px solid #dc2626" }} />
+        <div style={{ position: "absolute", inset: 0, border: "2px solid #dc2626" }} />
 
         <div
           style={{
@@ -2199,34 +2454,11 @@ updateLayer(dragState.layerId, nextUpdates);
             right: `${bleedPx}px`,
             top: `${bleedPx}px`,
             bottom: `${bleedPx}px`,
-            border: "3px dashed #f97316",
+            border: "2px dashed #f97316",
             background: "rgba(249,115,22,0.05)",
           }}
         />
 
-        <div
-          style={{
-            position: "absolute",
-            left: `${backTrimLeftPx + safeMarginPx}px`,
-            top: `${trimTopPx + safeMarginPx}px`,
-            width: `${backCoverWidthPx - safeMarginPx * 2}px`,
-            height: `${trimBottomPx - trimTopPx - safeMarginPx * 2}px`,
-            border: "3px dashed #16a34a",
-            background: "rgba(22,163,74,0.04)",
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            left: `${frontTrimLeftPx + safeMarginPx}px`,
-            top: `${trimTopPx + safeMarginPx}px`,
-            width: `${frontCoverWidthPx - safeMarginPx * 2}px`,
-            height: `${trimBottomPx - trimTopPx - safeMarginPx * 2}px`,
-            border: "3px dashed #16a34a",
-            background: "rgba(22,163,74,0.04)",
-          }}
-        />
 
         <div
           style={{
@@ -2529,14 +2761,16 @@ updateLayer(dragState.layerId, nextUpdates);
   return (
    <div
   onMouseDown={() => setSelectedLayerId(null)}
-  className="mx-auto grid max-w-[1200px] gap-5 px-4 py-5 lg:px-5"
+  className="mx-auto grid w-full max-w-5xl gap-5 px-4 py-8 sm:px-8"
 >
       <aside className="rounded-[2rem] border border-black/10 bg-white p-5 shadow-xl shadow-black/5 sm:p-6">
-        <div className="text-xs font-black uppercase tracking-[0.24em] text-[#b38b16]">
-          Cover Setup
+        <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#b38b16]">
+          Step 8 of 9
         </div>
 
-        <h2 className="mt-2 text-2xl font-black">Cover Assets</h2>
+        <h2 className="mt-2 text-4xl font-black">
+          Cover Creator
+        </h2>
 
 <p className="mt-3 text-sm leading-6 text-black/55">
   Design your paperback cover first. We’ll help adapt it into hardcover and Kindle versions.
@@ -2597,6 +2831,40 @@ markUnsaved();
       </div>
     </button>
   ))}
+  {coverAssetMode === "hardcover" ? (
+  <button
+  type="button"
+  onClick={scrollToLivePreview}
+  className="mt-4 w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm hover:bg-amber-100 transition"
+>
+    <p className="font-black"> ⚠️ Review Your Hardcover Cover Before Exporting.</p>
+    <p className="mt-1">
+      Hardcover covers use different wrap, spine, hinge, and fold areas than paperback.
+      We adapt your paperback design, but you should review the live preview and adjust
+      text or images before exporting.
+    </p>
+
+    {finalizedManuscriptTrimSize === "5x8" ? (
+      <p className="mt-3 font-black text-red-700">
+        ❌ Amazon KDP currently does not support 5 × 8 hardcover. Please select a different book size from the dropdown below.
+      </p>
+    ) : null}
+  </button>
+) : null}
+
+{coverAssetMode === "kindle" ? (
+  <button
+  type="button"
+  onClick={scrollToLivePreview}
+  className="mt-4 w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm hover:bg-amber-100 transition"
+>
+    <p className="font-black"> ⚠️ Review Your Kindle Cover Before Exporting.</p>
+    <p className="mt-1">
+      Kindle covers use a front-cover-only layout. We adapt your paperback front cover,
+      but you should review the preview and reposition or resize elements before exporting.
+    </p>
+  </button>
+) : null}
 </div>
 
 <div className="mt-7">
@@ -2605,9 +2873,15 @@ markUnsaved();
       Book Size
     </span>
    <select
-  value={trimSize}
-  disabled={projectData.hasFinalizedManuscript}
+  value={hardcoverRequiresManualTrimSize ? hardcoverTrimSizeOverride : trimSize}
+  disabled={projectData.hasFinalizedManuscript && !hardcoverRequiresManualTrimSize}
   onChange={(event) => {
+    if (hardcoverRequiresManualTrimSize) {
+      setHardcoverTrimSizeOverride(event.target.value as CoverTrimSizeKey);
+      markUnsaved();
+      return;
+    }
+
     if (projectData.hasFinalizedManuscript) return;
 
     setTrimSize(event.target.value as CoverTrimSizeKey);
@@ -2615,14 +2889,26 @@ markUnsaved();
   }}
   className="mt-3 w-full rounded-2xl border border-black/10 bg-[#faf8f3] px-4 py-4 text-sm font-bold outline-none focus:border-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60"
 >
-  {getCoverTrimSizeOptions().map((option) => (
-    <option key={option.key} value={option.key}>
-      {option.label}
-    </option>
-  ))}
+  {hardcoverRequiresManualTrimSize ? (
+    <>
+      <option value="">Select hardcover size</option>
+      <option value="5.5x8.5">5.5 x 8.5</option>
+      <option value="6x9">6 x 9</option>
+    </>
+  ) : (
+    getCoverTrimSizeOptions().map((option) => (
+      <option key={option.key} value={option.key}>
+        {option.label}
+      </option>
+    ))
+  )}
 </select>
 
-{projectData.hasFinalizedManuscript ? (
+{hardcoverRequiresManualTrimSize ? (
+  <p className="mt-2 text-xs font-bold leading-5 text-red-700">
+    Select a supported hardcover size before exporting.
+  </p>
+) : projectData.hasFinalizedManuscript ? (
   <p className="mt-2 text-xs font-bold leading-5 text-black/45">
     Locked from finalized manuscript to prevent cover/manuscript size mismatch.
   </p>
@@ -2685,7 +2971,10 @@ markUnsaved();
 ) : null}
       </aside>
 
-      <main className="min-w-0 rounded-[2rem] border border-black/10 bg-[#e9e2d0] p-4 shadow-xl shadow-black/5 sm:p-5">
+     <main
+  ref={livePreviewRef}
+  className="min-w-0 rounded-[2rem] border border-black/10 ..."
+>
         <div>
           <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a5a16]">
             Live Cover Wrap Preview
@@ -2788,7 +3077,14 @@ markUnsaved();
 {coverAssetMode === "kindle" ? (
   renderKindlePreview()
 ) : (
-        <div className="mt-8 overflow-x-auto rounded-[1.5rem] bg-black/10 p-4 sm:p-6 [-webkit-overflow-scrolling:touch]">
+        <div
+          className="mt-8 rounded-[1.5rem] bg-black/10 p-4 sm:p-6"
+          style={{
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
+        >
           <div
             className="relative mx-auto rounded-[28px] bg-[#151326] p-[10px] shadow-[0_35px_90px_rgba(0,0,0,0.32)]"
               style={{
@@ -2864,10 +3160,7 @@ markUnsaved();
               <span style={{ width: 32, height: 10, borderRadius: 999, backgroundColor: "#f97316", display: "inline-block" }} />
               Trim Line
             </div>
-            <div className="flex items-center gap-2">
-              <span style={{ width: 32, height: 10, borderRadius: 999, backgroundColor: "#16a34a", display: "inline-block" }} />
-              Safe Text Area
-            </div>
+            
             <div className="flex items-center gap-2">
               <span style={{ width: 32, height: 10, borderRadius: 999, backgroundColor: "#2563eb", display: "inline-block" }} />
               Spine Edges
@@ -2876,6 +3169,32 @@ markUnsaved();
         ) : null}
 
       </main>
+
+      <div className="mt-4 rounded-[1.5rem] border border-black/10 bg-white p-4">
+  <label className="flex items-start gap-3">
+    <input
+      type="checkbox"
+      checked={showGuides}
+      onChange={(event) => {
+        setShowGuides(event.target.checked);
+        markUnsaved();
+      }}
+      className="mt-1 h-4 w-4"
+    />
+
+    <div>
+      <div className="text-sm font-black text-black">
+        Show cover guide lines
+      </div>
+
+      <div className="mt-1 text-xs font-medium leading-5 text-black/55">
+        Display bleed, trim, safe area, spine, and hardcover crease guides on the preview.
+      </div>
+    </div>
+  </label>
+
+  
+</div>
 
       <aside className="rounded-[2rem] border border-black/10 bg-white p-5 shadow-xl shadow-black/5 sm:p-6 xl:max-h-[calc(100vh-48px)] xl:overflow-y-auto">
         <div className="text-xs font-black uppercase tracking-[0.24em] text-[#b38b16]">Design Tools</div>
@@ -3044,12 +3363,13 @@ markUnsaved();
           <section className="border-t border-black/10 pt-6">
   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
     <button
-      type="button"
-      onClick={saveCoverSettings}
-      className="rounded-xl bg-black px-5 py-3 text-sm font-black text-[#d4af37] transition hover:-translate-y-0.5"
-    >
-      Save Cover Settings
-    </button>
+  type="button"
+  onClick={saveCoverSettings}
+  disabled={isSavingCover}
+  className="w-full rounded-2xl bg-black px-5 py-4 text-sm font-black text-[#d4af37] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {isSavingCover ? "Saving..." : "Save Cover Settings"}
+</button>
 
     <button
       type="button"

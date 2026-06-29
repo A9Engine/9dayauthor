@@ -6,6 +6,22 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+type StructureChapter = {
+  id?: string;
+  chapter_number?: number;
+  title?: string;
+  description?: string;
+  reader_outcome?: string;
+};
+
+function isExistingChapterId(value: unknown) {
+  return (
+    typeof value === "string" &&
+    !value.startsWith("new-") &&
+    !value.startsWith("blueprint-")
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const { projectId } = await req.json();
@@ -128,6 +144,181 @@ Do not force 9 chapters unless 9 truly fits the book.
 
     return NextResponse.json(
       { error: "Something went wrong" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const { projectId, blueprint, chapters } = await req.json();
+
+    if (!projectId) {
+      return NextResponse.json({ error: "Missing projectId." }, { status: 400 });
+    }
+
+    if (!Array.isArray(chapters) || chapters.length === 0) {
+      return NextResponse.json(
+        { error: "At least one chapter is required." },
+        { status: 400 }
+      );
+    }
+
+    const { data: project, error: projectError } = await supabaseAdmin
+      .from("book_projects")
+      .select("id, user_id, blueprint_output")
+      .eq("id", projectId)
+      .single();
+
+    if (projectError || !project) {
+      return NextResponse.json({ error: "Project not found." }, { status: 404 });
+    }
+
+    const cleanedChapters = chapters.map((chapter: StructureChapter, index: number) => ({
+      id: chapter.id,
+      chapter_number: index + 1,
+      title: String(chapter.title || `Chapter ${index + 1}`).trim(),
+      description: String(chapter.description || "").trim(),
+      reader_outcome: String(chapter.reader_outcome || "").trim(),
+    }));
+
+    const existingBlueprint =
+      blueprint && typeof blueprint === "object"
+        ? blueprint
+        : project.blueprint_output && typeof project.blueprint_output === "object"
+        ? project.blueprint_output
+        : {};
+
+    const nextBlueprint = {
+      ...existingBlueprint,
+      recommended_chapter_count: cleanedChapters.length,
+      chapters: cleanedChapters.map((chapter) => ({
+        title: chapter.title,
+        description: chapter.description,
+        reader_outcome: chapter.reader_outcome,
+      })),
+    };
+
+    const { error: blueprintError } = await supabaseAdmin
+      .from("book_projects")
+      .update({
+        blueprint_output: nextBlueprint,
+        status: "blueprint_created",
+      })
+      .eq("id", projectId);
+
+    if (blueprintError) {
+      console.error(blueprintError);
+      return NextResponse.json(
+        { error: "Could not save blueprint structure." },
+        { status: 500 }
+      );
+    }
+
+    const { data: existingChapters, error: existingError } = await supabaseAdmin
+      .from("book_chapters")
+      .select("id")
+      .eq("project_id", projectId);
+
+    if (existingError) {
+      console.error(existingError);
+      return NextResponse.json(
+        { error: "Could not read existing chapters." },
+        { status: 500 }
+      );
+    }
+
+    const existingIds = new Set((existingChapters || []).map((chapter) => chapter.id));
+    const submittedExistingIds = new Set(
+      cleanedChapters
+        .filter((chapter) => isExistingChapterId(chapter.id) && existingIds.has(chapter.id))
+        .map((chapter) => chapter.id as string)
+    );
+
+    const idsToDelete = [...existingIds].filter((id) => !submittedExistingIds.has(id));
+
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from("book_chapters")
+        .delete()
+        .in("id", idsToDelete);
+
+      if (deleteError) {
+        console.error(deleteError);
+        return NextResponse.json(
+          { error: "Could not delete removed chapters." },
+          { status: 500 }
+        );
+      }
+    }
+
+    const savedChapters = [];
+
+    for (const chapter of cleanedChapters) {
+      if (isExistingChapterId(chapter.id) && existingIds.has(chapter.id)) {
+        const { data, error } = await supabaseAdmin
+          .from("book_chapters")
+          .update({
+            chapter_number: chapter.chapter_number,
+            title: chapter.title,
+            description: chapter.description,
+            reader_outcome: chapter.reader_outcome,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", chapter.id)
+          .select("id, chapter_number, title, description, reader_outcome")
+          .single();
+
+        if (error || !data) {
+          console.error(error);
+          return NextResponse.json(
+            { error: "Could not update chapter structure." },
+            { status: 500 }
+          );
+        }
+
+        savedChapters.push(data);
+        continue;
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("book_chapters")
+        .insert({
+          user_id: project.user_id,
+          project_id: projectId,
+          chapter_number: chapter.chapter_number,
+          title: chapter.title,
+          description: chapter.description,
+          reader_outcome: chapter.reader_outcome,
+          content: "",
+          status: "draft",
+        })
+        .select("id, chapter_number, title, description, reader_outcome")
+        .single();
+
+      if (error || !data) {
+        console.error(error);
+        return NextResponse.json(
+          { error: "Could not create chapter structure." },
+          { status: 500 }
+        );
+      }
+
+      savedChapters.push(data);
+    }
+
+    savedChapters.sort((a, b) => a.chapter_number - b.chapter_number);
+
+    return NextResponse.json({
+      success: true,
+      blueprint: nextBlueprint,
+      chapters: savedChapters,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      { error: "Something went wrong saving book structure." },
       { status: 500 }
     );
   }
