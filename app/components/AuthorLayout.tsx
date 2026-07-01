@@ -124,24 +124,43 @@ export default function AuthorLayout({
             );
           }
 
-          return (
-            <Link
-              key={item.label}
-              href={href}
-              prefetch={true}
-              onClick={closeMobileMenu}
-              className={`block rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                isActive
-                  ? "bg-white/12 text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span>{item.label}</span>
-                <span className="text-xs text-white/35">{item.step}</span>
-              </div>
-            </Link>
-          );
+          const navClassName = `block rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+  isActive
+    ? "bg-white/12 text-white"
+    : "text-white/70 hover:bg-white/10 hover:text-white"
+}`;
+
+const navContent = (
+  <div className="flex items-center justify-between">
+    <span>{item.label}</span>
+    <span className="text-xs text-white/35">{item.step}</span>
+  </div>
+);
+
+if (item.href === "/cover-creator") {
+  return (
+    <a
+      key={item.label}
+      href={href}
+      onClick={closeMobileMenu}
+      className={navClassName}
+    >
+      {navContent}
+    </a>
+  );
+}
+
+return (
+  <Link
+    key={item.label}
+    href={href}
+    prefetch={false}
+    onClick={closeMobileMenu}
+    className={navClassName}
+  >
+    {navContent}
+  </Link>
+);
         })}
        <div className="mt-6 border-t border-white/10 pt-4">
 

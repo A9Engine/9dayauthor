@@ -724,6 +724,13 @@ export default function FormattingWorkspace({
 
   const [isSavingFormatting, setIsSavingFormatting] = useState(false);
   const [formattingMessage, setFormattingMessage] = useState("");
+  const [trimSizeStatus, setTrimSizeStatus] = useState("");
+  const [trimSizeStatusType, setTrimSizeStatusType] = useState<
+    "updating" | "success" | "error" | ""
+  >("");
+  const [pendingTrimSize, setPendingTrimSize] = useState<string | null>(null);
+  const trimSizeUpdateStartedAtRef = useRef<number | null>(null);
+  const trimSizeUpdateTimerRef = useRef<number | null>(null);
 
   const [layout, setLayout] = useState<MeasuredBookLayout | null>(null);
   const [isLayoutLoading, setIsLayoutLoading] = useState(true);
@@ -921,6 +928,55 @@ export default function FormattingWorkspace({
     };
   }, [contentBlocks, trimSize, fontFamily, lineSpacing, layoutCacheKey]);
 
+  useEffect(() => {
+  if (!pendingTrimSize) return;
+
+  // Important:
+  // Do not show "updated" until the selected trim size has actually changed
+  // and the new layout has finished calculating.
+  if (pendingTrimSize !== trimSize) return;
+  if (isLayoutLoading) return;
+
+  const startedAt = trimSizeUpdateStartedAtRef.current || Date.now();
+  const elapsedMs = Date.now() - startedAt;
+  const minimumVisibleMs = 1200;
+  const remainingMs = Math.max(0, minimumVisibleMs - elapsedMs);
+
+  let clearTimer: number | undefined;
+
+  const finishTimer = window.setTimeout(() => {
+    if (layoutError) {
+      setTrimSizeStatusType("error");
+      setTrimSizeStatus("Could not update trim size preview.");
+      return;
+    }
+
+    if (!layout) return;
+
+    const updatedTrimSize = pendingTrimSize;
+
+    setTrimSizeStatusType("success");
+    setTrimSizeStatus(
+      `Trim size updated to ${updatedTrimSize}. Click Save Formatting to apply this to your book.`
+    );
+
+    clearTimer = window.setTimeout(() => {
+      setTrimSizeStatus("");
+      setTrimSizeStatusType("");
+      setPendingTrimSize(null);
+      trimSizeUpdateStartedAtRef.current = null;
+    }, 8000);
+  }, remainingMs);
+
+  return () => {
+    window.clearTimeout(finishTimer);
+
+    if (clearTimer) {
+      window.clearTimeout(clearTimer);
+    }
+  };
+}, [pendingTrimSize, trimSize, isLayoutLoading, layout, layoutError]);
+
   const pages = layout?.pages || [];
   const previewSpreads = useMemo(() => buildPreviewSpreads(pages), [pages]);
 
@@ -1028,14 +1084,33 @@ export default function FormattingWorkspace({
             <select
               value={trimSize}
               onChange={(event) => {
-                const nextTrimSize = normalizeDisplayTrimSize(
-                  event.target.value
-                );
+  const nextTrimSize = normalizeDisplayTrimSize(event.target.value);
 
-                setTrimSize(nextTrimSize);
-                writeStoredTrimSize(projectId, nextTrimSize);
-                setCurrentSpreadIndex(0);
-              }}
+  if (nextTrimSize === trimSize) return;
+
+  if (trimSizeUpdateTimerRef.current) {
+    window.clearTimeout(trimSizeUpdateTimerRef.current);
+  }
+
+  trimSizeUpdateStartedAtRef.current = Date.now();
+
+  setPendingTrimSize(nextTrimSize);
+  setTrimSizeStatusType("updating");
+  setTrimSizeStatus(`Updating trim size to ${nextTrimSize}...`);
+  setFormattingMessage("");
+  setLayoutError("");
+  setLayout(null);
+  setIsLayoutLoading(true);
+  setCurrentSpreadIndex(0);
+
+  // Give React/the browser a moment to paint the "Updating..." message
+  // before the heavy measured layout recalculation begins.
+  trimSizeUpdateTimerRef.current = window.setTimeout(() => {
+    setTrimSize(nextTrimSize);
+    writeStoredTrimSize(projectId, nextTrimSize);
+    trimSizeUpdateTimerRef.current = null;
+  }, 150);
+}}
               className="mt-3 w-full rounded-2xl border border-black/10 bg-[#faf8f3] px-5 py-4 text-lg outline-none"
             >
               <option value="5 x 8">5 x 8</option>
@@ -1063,30 +1138,46 @@ export default function FormattingWorkspace({
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            type="button"
-            onClick={saveFormattingSettings}
-            disabled={isSavingFormatting}
-            className="rounded-2xl bg-black px-6 py-4 text-sm font-black text-[#d4af37] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSavingFormatting ? "Saving..." : "Save Formatting Settings"}
-          </button>
+       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <button
+    type="button"
+    onClick={saveFormattingSettings}
+    disabled={isSavingFormatting}
+    className="rounded-2xl bg-black px-6 py-4 text-sm font-black text-[#d4af37] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {isSavingFormatting ? "Saving..." : "Save Formatting Settings"}
+  </button>
 
-          {formattingMessage ? (
-            <p
-              className={`text-sm font-bold ${
-                formattingMessage.includes("saved")
-                  ? "text-green-700"
-                  : formattingMessage.includes("Could not")
-                  ? "text-red-600"
-                  : "text-black/60"
-              }`}
-            >
-              {formattingMessage}
-            </p>
-          ) : null}
-        </div>
+  <div className="min-h-[52px] flex-1 sm:flex sm:justify-end">
+    {trimSizeStatus ? (
+      <div
+        className={`flex min-h-[52px] items-center rounded-2xl border px-4 py-3 text-sm font-bold ${
+          trimSizeStatusType === "success"
+            ? "border-green-200 bg-green-50 text-green-700"
+            : trimSizeStatusType === "error"
+            ? "border-red-200 bg-red-50 text-red-700"
+            : "border-[#d4af37]/30 bg-[#fff8df] text-[#7a5a16]"
+        }`}
+      >
+        {trimSizeStatus}
+      </div>
+    ) : formattingMessage ? (
+      <div
+        className={`flex min-h-[52px] items-center rounded-2xl border px-4 py-3 text-sm font-bold ${
+          formattingMessage.includes("saved")
+            ? "border-green-200 bg-green-50 text-green-700"
+            : formattingMessage.includes("Could not")
+            ? "border-red-200 bg-red-50 text-red-700"
+            : "border-black/10 bg-white text-black/60"
+        }`}
+      >
+        {formattingMessage}
+      </div>
+    ) : (
+      <div className="min-h-[52px]" />
+    )}
+  </div>
+</div>
       </div>
 
       <div

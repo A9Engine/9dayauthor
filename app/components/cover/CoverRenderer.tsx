@@ -121,6 +121,14 @@ export default function CoverRenderer({
     fullWrapImageScale / 100
   })`;
 
+  const approximateBleedIn = previewScale > 0 ? bleedPx / previewScale : 0;
+  const shouldShowHardcoverHingeGuides =
+    !isExport && showGuides && approximateBleedIn > 0.5;
+
+  const hardcoverHingeOffsetPx = 0.4 * previewScale;
+  const backHingeLineX = spineLeftPx - hardcoverHingeOffsetPx;
+  const frontHingeLineX = spineLeftPx + spineWidthPx + hardcoverHingeOffsetPx;
+
   return (
     <div
       className={
@@ -225,27 +233,27 @@ export default function CoverRenderer({
               ) : null}
 
               {panel === "back" && !isExport ? (
-              <div
-                className="pointer-events-none absolute z-[70] flex items-center justify-center"
-                style={{
-                  right: `${safeMarginPx + 4}px`,
-                  bottom: `${bleedPx + safeMarginPx + 4}px`,
-                  width: "108px",
-                  height: "58px",
-                  background: "transparent",
-                  border: "none",
-                  borderRadius: "0px",
-                  boxShadow: "none",
-                  padding: "0px",
-                }}
-              >
-                <img
-                  src="/barcode-placeholder.svg"
-                  alt="ISBN barcode placeholder"
-                  className="h-full w-full object-contain"
-                />
-              </div>
-            ) : null}
+                <div
+                  className="pointer-events-none absolute z-[70] flex items-center justify-center"
+                  style={{
+                    right: `${safeMarginPx + 4}px`,
+                    bottom: `${bleedPx + safeMarginPx + 4}px`,
+                    width: "108px",
+                    height: "58px",
+                    background: "transparent",
+                    border: "none",
+                    borderRadius: "0px",
+                    boxShadow: "none",
+                    padding: "0px",
+                  }}
+                >
+                  <img
+                    src="/barcode-placeholder.svg"
+                    alt="ISBN barcode placeholder"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              ) : null}
             </section>
           );
         })}
@@ -294,6 +302,27 @@ export default function CoverRenderer({
           snapGuide={snapGuide}
           panelRects={panelRects}
         />
+      ) : null}
+
+      {shouldShowHardcoverHingeGuides ? (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ zIndex: 98 }}
+        >
+          {[backHingeLineX, frontHingeLineX].map((x, index) => (
+            <div
+              key={`hardcover-hinge-guide-${index}`}
+              style={{
+                position: "absolute",
+                left: `${x}px`,
+                top: "0px",
+                height: `${wrapHeightPx}px`,
+                borderLeft: "3px dotted #a855f7",
+                boxShadow: "0 0 0 1px rgba(255,255,255,0.75)",
+              }}
+            />
+          ))}
+        </div>
       ) : null}
     </div>
   );

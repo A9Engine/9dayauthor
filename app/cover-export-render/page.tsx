@@ -156,8 +156,12 @@ export default async function CoverExportRenderPage({
   const frontCoverWidthPx = layout.frontCoverWidthIn * INCH_TO_PX;
   const spineWidthPx = layout.spineWidthIn * INCH_TO_PX;
 
-  const spineLeftPx = bleedPx + backCoverWidthPx;
-  const frontTrimLeftPx = spineLeftPx + spineWidthPx;
+  // Important:
+  // Do NOT calculate the spine using bleedPx + backCoverWidthPx.
+  // That works for paperback, but hardcover uses a different horizontal wrap.
+  // These values must come directly from coverCalculator.ts.
+  const spineLeftPx = layout.spineStartIn * INCH_TO_PX;
+  const frontTrimLeftPx = layout.frontCoverStartIn * INCH_TO_PX;
 
   return (
     <>
@@ -230,6 +234,7 @@ export default async function CoverExportRenderPage({
           selectedLayerId={null}
           cropLayerId={null}
           interactive={false}
+          mode="export"
         />
       </main>
     </>

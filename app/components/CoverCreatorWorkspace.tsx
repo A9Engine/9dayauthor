@@ -14,11 +14,14 @@ import {
 import {
   calculateCoverLayout,
   formatInches,
+  getCoverTrimSize,
   getCoverTrimSizeOptions,
   type CoverFormat,
   type CoverPaperType,
   type CoverTrimSizeKey,
 } from "../../lib/coverCalculator";
+
+import CoverRenderer from "./cover/CoverRenderer";
 
 type ImageFitMode = "cover" | "contain";
 type CoverPanelKey = "back" | "spine" | "front";
@@ -776,6 +779,9 @@ const activeTrimSize: CoverTrimSizeKey =
     ? hardcoverTrimSizeOverride
     : trimSize;
 
+const activePrintFormat: CoverFormat =
+  coverAssetMode === "hardcover" ? "hardcover" : "paperback";
+
 const coverLayers =
   coverAssetMode === "kindle"
     ? kindleLayers
@@ -955,13 +961,13 @@ function scrollToLivePreview() {
   }, [isGeneratingImage]);
 
   const layout = useMemo(() => {
-    return calculateCoverLayout({
-      format: coverFormat,
-      trimSize: activeTrimSize,
-      paperType,
-      pageCount,
-    });
-  }, [coverFormat, activeTrimSize, paperType, pageCount]);
+  return calculateCoverLayout({
+    format: activePrintFormat,
+    trimSize: activeTrimSize,
+    paperType,
+    pageCount,
+  });
+}, [activePrintFormat, activeTrimSize, paperType, pageCount]);
 
   const previewScale = useMemo(() => {
     const usableWidth = viewportWidth < 768 ? viewportWidth - 72 : 900;
@@ -971,21 +977,34 @@ function scrollToLivePreview() {
   }, [layout.fullWrapWidthIn, viewportWidth]);
 
   const bleedPx = layout.bleedIn * previewScale;
-  const safeMarginPx = layout.safeMarginIn * previewScale;
-  const backCoverWidthPx = layout.backCoverWidthIn * previewScale;
-  const frontCoverWidthPx = layout.frontCoverWidthIn * previewScale;
-  const realSpineWidthPx = layout.spineWidthIn * previewScale;
-  const spineWidthPx = Math.max(realSpineWidthPx, viewportWidth < 768 ? 12 : 18);
-  const wrapHeightPx = layout.fullWrapHeightIn * previewScale;
-  const visualWrapWidthPx =
-    bleedPx + backCoverWidthPx + spineWidthPx + frontCoverWidthPx + bleedPx;
+const safeMarginPx = layout.safeMarginIn * previewScale;
+const backCoverWidthPx = layout.backCoverWidthIn * previewScale;
+const frontCoverWidthPx = layout.frontCoverWidthIn * previewScale;
+const realSpineWidthPx = layout.spineWidthIn * previewScale;
 
-  const trimTopPx = bleedPx;
-  const trimBottomPx = wrapHeightPx - bleedPx;
-  const backTrimLeftPx = bleedPx;
-  const backTrimRightPx = bleedPx + backCoverWidthPx;
-  const spineLeftPx = backTrimRightPx;
-  const frontTrimLeftPx = spineLeftPx + spineWidthPx;
+// Keep the tiny mobile visual spine minimum only for very small screens.
+// On desktop/export-style preview, use the real spine width.
+const spineWidthPx =
+  viewportWidth < 768 ? Math.max(realSpineWidthPx, 12) : realSpineWidthPx;
+
+const wrapHeightPx = layout.fullWrapHeightIn * previewScale;
+const visualWrapWidthPx = layout.fullWrapWidthIn * previewScale;
+
+const trim = getCoverTrimSize(activeTrimSize);
+const verticalWrapPx =
+  ((layout.fullWrapHeightIn - trim.heightIn) / 2) * previewScale;
+
+// Important:
+// For hardcover, do not use bleed as the trim/wrap starting point.
+// Use the layout start positions from coverCalculator.ts.
+const trimTopPx = verticalWrapPx;
+const trimBottomPx = wrapHeightPx - verticalWrapPx;
+
+const backTrimLeftPx = layout.backCoverStartIn * previewScale;
+const backTrimRightPx = backTrimLeftPx + backCoverWidthPx;
+
+const spineLeftPx = layout.spineStartIn * previewScale;
+const frontTrimLeftPx = layout.frontCoverStartIn * previewScale;
 
   const fullWrapImageTransform = `translate(${fullWrapImageX}px, ${fullWrapImageY}px) scale(${
     fullWrapImageScale / 100
@@ -1255,7 +1274,7 @@ function scrollToLivePreview() {
           prompt: aiPrompt,
           title,
           genre: projectData.book_type || "",
-          coverFormat,
+          coverFormat: activePrintFormat,
           trimSize: activeTrimSize,
         }),
       });
@@ -1309,8 +1328,8 @@ function scrollToLivePreview() {
     setIsExportingCover(true);
     setSaveMessage("Exporting print cover...");
 
-    const format =
-      coverAssetMode === "hardcover" ? "hardcover" : "paperback";
+    const format = activePrintFormat
+    
 
     const params = new URLSearchParams({
       projectId: projectData.id,
@@ -1426,7 +1445,7 @@ async function exportKindleCover() {
       },
       body: JSON.stringify({
         project_id: projectData.id,
-        cover_format: coverFormat,
+        cover_format: activePrintFormat,
         trim_size: activeTrimSize,
         paper_type: paperType,
         page_count: pageCount,
@@ -2758,6 +2777,32 @@ updateLayer(dragState.layerId, nextUpdates);
   );
 }
 
+
+  function handleRendererLayerMouseDown(
+    event: ReactMouseEvent<HTMLDivElement>,
+    layer: CoverLayer,
+    mode: "move" | "resize" = "move",
+    corner: ResizeCorner = "bottom-right"
+  ) {
+    beginLayerDrag(event, layer, mode, corner);
+  }
+
+  function handleRendererLayerClick(
+    event: ReactMouseEvent<HTMLDivElement>,
+    layer: CoverLayer
+  ) {
+    event.stopPropagation();
+    setSelectedPanel(layer.panel);
+    setSelectedLayerId(layer.id);
+  }
+
+  function handleRendererImageCropMouseDown(
+    event: ReactMouseEvent<HTMLImageElement>,
+    layer: CoverImageLayer
+  ) {
+    beginImageCropDrag(event, layer);
+  }
+
   return (
    <div
   onMouseDown={() => setSelectedLayerId(null)}
@@ -3077,96 +3122,110 @@ markUnsaved();
 {coverAssetMode === "kindle" ? (
   renderKindlePreview()
 ) : (
-        <div
-          className="mt-8 rounded-[1.5rem] bg-black/10 p-4 sm:p-6"
-          style={{
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
-          <div
-            className="relative mx-auto rounded-[28px] bg-[#151326] p-[10px] shadow-[0_35px_90px_rgba(0,0,0,0.32)]"
-              style={{
-            width: `${visualWrapWidthPx + 20}px`,
-            minWidth: `${visualWrapWidthPx + 20}px`,
-            }}
-          >
-            <div
-              className="relative overflow-hidden rounded-[20px] bg-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18),inset_18px_0_24px_rgba(0,0,0,0.08),inset_-18px_0_24px_rgba(0,0,0,0.08)]"
-              style={{
-            width: `${visualWrapWidthPx}px`,
-            height: `${wrapHeightPx}px`,
-            }}
-            >
-              {fullWrapBackgroundImage ? (
-                <img
-                  src={fullWrapBackgroundImage}
-                  alt=""
-                  className="absolute inset-0 h-full w-full"
-                  style={{
-                    objectFit: fullWrapImageFitMode,
-                    objectPosition: "center",
-                    transform: fullWrapImageTransform,
-                    transformOrigin: "center",
-                    zIndex: 1,
-                  }}
-                />
-              ) : (
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    zIndex: 1,
-                    background:
-                      "radial-gradient(circle at center, #fffdf7 0%, #f2ead8 42%, #d8cdb7 100%)",
-                  }}
-                />
-              )}
-
-              <div
-                className="absolute left-0 top-0 flex"
-                style={{ zIndex: 20, width: `${visualWrapWidthPx}px`, height: `${wrapHeightPx}px` }}
-              >
-                {PHYSICAL_WRAP_ORDER.map((panel) => renderPanel(panel))}
-              </div>
-
-              {renderArtworkOverlays()}
-
-              {renderCoreTextOverlays()}
-
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  zIndex: 30,
-                  background:
-                    "linear-gradient(to right, rgba(0,0,0,0.06), transparent 8%, transparent 42%, rgba(0,0,0,0.12) 49%, rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.12) 51%, transparent 58%, transparent 92%, rgba(0,0,0,0.06))",
-                }}
-              />
-
-              {renderGuides()}
-              {renderSnapGuide()}
-            </div>
-          </div>
-        </div>
+  <div
+    className="mt-8 rounded-[1.5rem] bg-black/10 p-4 sm:p-6"
+    style={{
+      overflowX: "auto",
+      scrollbarWidth: "none",
+      msOverflowStyle: "none",
+    }}
+  >
+    <div
+      className="relative mx-auto rounded-[28px] bg-[#151326] p-[10px] shadow-[0_35px_90px_rgba(0,0,0,0.32)]"
+      style={{
+        width: `${visualWrapWidthPx + 20}px`,
+        minWidth: `${visualWrapWidthPx + 20}px`,
+      }}
+    >
+      <CoverRenderer
+        layers={coverLayers}
+        panelStyles={panelStyles}
+        fullWrapBackgroundImage={fullWrapBackgroundImage}
+        fullWrapImageScale={fullWrapImageScale}
+        fullWrapImageX={fullWrapImageX}
+        fullWrapImageY={fullWrapImageY}
+        fullWrapImageFitMode={fullWrapImageFitMode}
+        visualWrapWidthPx={visualWrapWidthPx}
+        wrapHeightPx={wrapHeightPx}
+        bleedPx={bleedPx}
+        safeMarginPx={safeMarginPx}
+        backCoverWidthPx={backCoverWidthPx}
+        frontCoverWidthPx={frontCoverWidthPx}
+        spineWidthPx={spineWidthPx}
+        spineLeftPx={spineLeftPx}
+        frontTrimLeftPx={frontTrimLeftPx}
+        previewScale={previewScale}
+        showGuides={showGuides}
+        snapGuide={snapGuide}
+        selectedLayerId={selectedLayerId}
+        cropLayerId={cropLayerId}
+        interactive={true}
+        onLayerMouseDown={handleRendererLayerMouseDown}
+        onLayerClick={handleRendererLayerClick}
+        onImageCropMouseDown={handleRendererImageCropMouseDown}
+        mode="editor"
+      />
+    </div>
+  </div>
 )}
 
         {showGuides ? (
-          <div className="mt-4 grid gap-2 rounded-2xl bg-white/85 p-4 text-xs font-black uppercase tracking-[0.12em] text-black/60 sm:grid-cols-4">
-            <div className="flex items-center gap-2">
-              <span style={{ width: 32, height: 10, borderRadius: 999, backgroundColor: "#dc2626", display: "inline-block" }} />
-              Full Bleed Edge
-            </div>
-            <div className="flex items-center gap-2">
-              <span style={{ width: 32, height: 10, borderRadius: 999, backgroundColor: "#f97316", display: "inline-block" }} />
-              Trim Line
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span style={{ width: 32, height: 10, borderRadius: 999, backgroundColor: "#2563eb", display: "inline-block" }} />
-              Spine Edges
-            </div>
-          </div>
-        ) : null}
+  <div className="mt-4 grid gap-2 rounded-2xl bg-white/85 p-4 text-xs font-black uppercase tracking-[0.12em] text-black/60 sm:grid-cols-4">
+    <div className="flex items-center gap-2">
+      <span
+        style={{
+          width: 32,
+          height: 10,
+          borderRadius: 999,
+          backgroundColor: "#dc2626",
+          display: "inline-block",
+        }}
+      />
+      Full Bleed Edge
+    </div>
+
+    <div className="flex items-center gap-2">
+      <span
+        style={{
+          width: 32,
+          height: 10,
+          borderRadius: 999,
+          backgroundColor: "#f97316",
+          display: "inline-block",
+        }}
+      />
+      Trim Line
+    </div>
+
+    <div className="flex items-center gap-2">
+      <span
+        style={{
+          width: 32,
+          height: 10,
+          borderRadius: 999,
+          backgroundColor: "#2563eb",
+          display: "inline-block",
+        }}
+      />
+      Spine Edges
+    </div>
+
+    {coverAssetMode === "hardcover" ? (
+      <div className="flex items-center gap-2">
+        <span
+          style={{
+            width: 32,
+            height: 10,
+            borderRadius: 999,
+            borderTop: "3px dotted #a855f7",
+            display: "inline-block",
+          }}
+        />
+        Hinge / Crease
+      </div>
+    ) : null}
+  </div>
+) : null}
 
       </main>
 
